@@ -7,69 +7,104 @@ st.set_page_config(page_title="Rainbow Industries - Billing", layout="wide")
 
 st.title("Rainbow Industries - Delivery Challan Generator")
 
-# --- Input Form ---
-with st.form("challan_form"):
-    st.subheader("Party & Challan Details")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        party_name = st.text_input("Dispatch To (Party Name)", value="")
-        party_address = st.text_area("Party Address", value="")
-        party_gstin = st.text_input("Party GSTIN", value="")
-        
-        # Dispatch To ke andar State aur Code
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            party_state = st.text_input("Party State", value="")
-        with col_p2:
-            party_state_code = st.text_input("Party State Code", value="")
-            
-    with col2:
-        # Challan Details ko 2 hisso mein baant diya
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            challan_no = st.text_input("Challan No.", value="")
-            vehicle_no = st.text_input("Vehicle No.", value="")
-            date_of_supply = st.date_input("Date of Supply", datetime.date.today())
-        with col_c2:
-            challan_date = st.date_input("Challan Date", datetime.date.today())
-            transport_mode = st.text_input("Transport Mode", value="Road")
-            place_of_supply = st.text_input("Place of Supply", value="")
-        
-        st.markdown("---")
-        # Rainbow Industries ke apne GST, State aur Code ke liye fields
-        owner_gstin = st.text_input("Rainbow Industries GSTIN", value="")
-        col_st1, col_st2 = st.columns(2)
-        with col_st1:
-            state_name = st.text_input("My State", value="UP")
-        with col_st2:
-            state_code = st.text_input("My State Code", value="09")
+# Initialize session state for dynamic items
+if 'item_count' not in st.session_state:
+    st.session_state.item_count = 1
 
-    st.subheader("Item Details")
-    item_desc = st.text_area("Product Description", value="")
-    hsn_code = st.text_input("HSN Code", value="")
-    boxes = st.text_input("No of Box", value="")
+st.subheader("Party & Challan Details")
+col1, col2 = st.columns(2)
+
+with col1:
+    party_name = st.text_input("Dispatch To (Party Name)", value="")
+    party_address = st.text_area("Party Address", value="")
+    party_gstin = st.text_input("Party GSTIN", value="")
     
-    col3, col4 = st.columns(2)
-    with col3:
-        qty = st.number_input("Total Quantity", value=0, min_value=0, step=1)
-    with col4:
-        rate = st.number_input("Approx. Rate", value=0.0, min_value=0.0)
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        party_state = st.text_input("Party State", value="")
+    with col_p2:
+        party_state_code = st.text_input("Party State Code", value="")
+        
+with col2:
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        challan_no = st.text_input("Challan No.", value="")
+        vehicle_no = st.text_input("Vehicle No.", value="")
+        date_of_supply = st.date_input("Date of Supply", datetime.date.today())
+    with col_c2:
+        challan_date = st.date_input("Challan Date", datetime.date.today())
+        transport_mode = st.text_input("Transport Mode", value="Road")
+        place_of_supply = st.text_input("Place of Supply", value="")
     
-    submit = st.form_submit_button("Generate Challan")
+    st.markdown("---")
+    owner_gstin = st.text_input("Rainbow Industries GSTIN", value="")
+    col_st1, col_st2 = st.columns(2)
+    with col_st1:
+        state_name = st.text_input("My State", value="UP")
+    with col_st2:
+        state_code = st.text_input("My State Code", value="09")
+
+st.markdown("---")
+st.subheader("Item Details")
+
+# Buttons to add/remove items
+col_btn1, col_btn2, _ = st.columns([2, 2, 8])
+with col_btn1:
+    if st.button("➕ Add Another Item"):
+        st.session_state.item_count += 1
+with col_btn2:
+    if st.button("➖ Remove Last Item"):
+        if st.session_state.item_count > 1:
+            st.session_state.item_count -= 1
+
+# Dynamic item rows
+items_data = []
+for i in range(st.session_state.item_count):
+    st.markdown(f"**Item {i+1}**")
+    c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
+    with c1:
+        desc = st.text_area(f"Description", key=f"desc_{i}", height=68)
+    with c2:
+        hsn = st.text_input(f"HSN", key=f"hsn_{i}")
+    with c3:
+        boxes = st.text_input(f"Boxes", key=f"box_{i}")
+    with c4:
+        qty = st.number_input(f"Qty", min_value=0, step=1, key=f"qty_{i}")
+    with c5:
+        rate = st.number_input(f"Rate", min_value=0.0, step=0.1, key=f"rate_{i}")
+    
+    items_data.append({
+        "desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate
+    })
+
+st.markdown("---")
+submit = st.button("🚀 Generate Challan PDF", type="primary", use_container_width=True)
 
 # --- Processing & PDF Generation ---
 if submit:
-    # Calculations
-    amount = qty * rate
-    cgst = amount * 0.09
-    sgst = amount * 0.09
-    total_tax = cgst + sgst  # Naya Calculation: Total Amount of Tax
-    total_amount = amount + total_tax
+    # Calculate totals for ALL items
+    total_amount_before_tax = sum(item['amount'] for item in items_data)
+    cgst = total_amount_before_tax * 0.09
+    sgst = total_amount_before_tax * 0.09
+    total_tax = cgst + sgst
+    total_amount = total_amount_before_tax + total_tax
     
-    # PDF me print hone ke liye "Pcs" auto-add
-    qty_display = f"{qty} Pcs" if qty > 0 else ""
-    
+    # Generate HTML for all item rows dynamically
+    items_html = ""
+    for idx, item in enumerate(items_data):
+        qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
+        items_html += f"""
+        <tr>
+            <td style="text-align:center;">{idx+1}.</td>
+            <td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td>
+            <td style="text-align:center;">{item['hsn']}</td>
+            <td style="text-align:center;">{item['boxes']}</td>
+            <td style="text-align:center;">{qty_display}</td>
+            <td style="text-align:right;">{item['rate']:.2f}</td>
+            <td style="text-align:right;">{item['amount']:.2f}</td>
+        </tr>
+        """
+        
     # Convert total to words
     if total_amount > 0:
         amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only."
@@ -93,7 +128,7 @@ if submit:
         table {{ width: 100%; border-collapse: collapse; }}
         td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }}
         .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #2c3e50; border-top: 2px solid #2c3e50; }}
-        .items-table td {{ height: 250px; }}
+        .spacer-row td {{ height: 150px; border-top: none; border-bottom: none; }}
         .footer {{ padding: 10px; height: 100px; border-top: 2px solid #2c3e50; background-color: #f8f9fa; position: relative; }}
         .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
     </style>
@@ -106,7 +141,6 @@ if submit:
                     <strong>State:</strong> {state_name}<br>
                     <strong>Code:</strong> {state_code}
                 </div>
-                
                 <h2>DELIVERY CHALLAN</h2>
                 <h1>RAINBOW INDUSTRIES</h1>
                 <p>(An ISO 9001:2015 Certified Company)</p>
@@ -152,14 +186,9 @@ if submit:
                     <th style="width:12%;">Approx. Rate</th>
                     <th style="width:18%;">Approx. Amount</th>
                 </tr>
-                <tr>
-                    <td style="text-align:center;">1.</td>
-                    <td><strong>{item_desc.replace(chr(10), '<br>')}</strong></td>
-                    <td style="text-align:center;">{hsn_code}</td>
-                    <td style="text-align:center;">{boxes}</td>
-                    <td style="text-align:center;">{qty_display}</td>
-                    <td style="text-align:right;">{rate:.2f}</td>
-                    <td style="text-align:right;">{amount:.2f}</td>
+                {items_html}
+                <tr class="spacer-row">
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
                 </tr>
             </table>
 
@@ -170,7 +199,7 @@ if submit:
                         <em>{amount_in_words}</em>
                     </td>
                     <td style="width:20%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td>
-                    <td style="width:20%; text-align:right;">{amount:.2f}</td>
+                    <td style="width:20%; text-align:right;">{total_amount_before_tax:.2f}</td>
                 </tr>
                 <tr>
                     <td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td>
