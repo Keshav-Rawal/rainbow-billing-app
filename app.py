@@ -21,13 +21,15 @@ with st.form("challan_form"):
         challan_no = st.text_input("Challan No.", value="")
         challan_date = st.date_input("Date", datetime.date.today())
         vehicle_no = st.text_input("Vehicle No.", value="")
+        # Rainbow Industries ke apne GST aur State Code ke liye fields
+        owner_gstin = st.text_input("Rainbow Industries GSTIN", value="")
+        state_code = st.text_input("State Code", value="09")
 
     st.subheader("Item Details")
     item_desc = st.text_area("Product Description", value="")
     hsn_code = st.text_input("HSN Code", value="")
     boxes = st.text_input("No of Box", value="")
     
-    # Naya Layout: Ek hi Quantity box jisme + icon hai (step=1 se aayega)
     col3, col4 = st.columns(2)
     with col3:
         qty = st.number_input("Total Quantity", value=0, min_value=0, step=1)
@@ -44,7 +46,7 @@ if submit:
     sgst = amount * 0.09
     total_amount = amount + cgst + sgst
     
-    # PDF me print hone ke liye "Pcs" auto-add kar diya
+    # PDF me print hone ke liye "Pcs" auto-add
     qty_display = f"{qty} Pcs" if qty > 0 else ""
     
     # Convert total to words
@@ -62,8 +64,8 @@ if submit:
         @page {{ size: A4; margin: 15mm; }}
         body {{ font-family: Arial, sans-serif; font-size: 12px; color: #333; }}
         .container {{ border: 2px solid #2c3e50; width: 100%; }}
-        .header {{ text-align: center; border-bottom: 2px solid #2c3e50; padding: 15px 10px; background-color: #f8f9fa; }}
-        .header h1 {{ margin: 5px 0; color: #2c3e50; font-size: 26px; }}
+        .header {{ text-align: center; border-bottom: 2px solid #2c3e50; padding: 15px 10px; background-color: #f8f9fa; position: relative; }}
+        .header h1 {{ margin: 5px 0; color: #2c3e50; font-size: 26px; line-height: 1.2; }}
         .header p {{ margin: 3px 0; font-size: 11px; }}
         table {{ width: 100%; border-collapse: collapse; }}
         td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }}
@@ -76,6 +78,16 @@ if submit:
     <body>
         <div class="container">
             <div class="header">
+                <table style="border:none; width:100%; margin-top:-5px; margin-bottom:5px;">
+                    <tr>
+                        <td style="border:none; text-align:left; font-size:11px; color:#555; line-height:1.4; padding:0;">
+                            <strong>GSTIN:</strong> {owner_gstin}<br>
+                            <strong>State Code:</strong> {state_code}
+                        </td>
+                        <td style="border:none; padding:0;"></td>
+                    </tr>
+                </table>
+                
                 <h1>RAINBOW INDUSTRIES</h1>
                 <p>(An ISO 9001:2015 Certified Company)</p>
                 <p>2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207</p>
