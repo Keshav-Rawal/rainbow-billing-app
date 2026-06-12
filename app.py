@@ -13,39 +13,47 @@ with st.form("challan_form"):
     col1, col2 = st.columns(2)
     
     with col1:
-        party_name = st.text_input("Dispatch To (Party Name)", value="MATERIAL MOVELL INDIA PVT LTD")
-        party_address = st.text_area("Party Address", value="G-86/1 INDUSTRIAL AREA SITE-5, Kasna, Greater Noida (U.P)")
-        party_gstin = st.text_input("Party GSTIN", value="09AACCM2525P1Z")
+        party_name = st.text_input("Dispatch To (Party Name)", value="")
+        party_address = st.text_area("Party Address", value="")
+        party_gstin = st.text_input("Party GSTIN", value="")
     
     with col2:
-        challan_no = st.text_input("Challan No.", value="006")
+        challan_no = st.text_input("Challan No.", value="")
         challan_date = st.date_input("Date", datetime.date.today())
-        vehicle_no = st.text_input("Vehicle No.", value="UP16 DC 9834")
+        vehicle_no = st.text_input("Vehicle No.", value="")
 
     st.subheader("Item Details")
-    item_desc = st.text_input("Product Description", value="BASE PLATE\nJob work only for ED coating")
-    hsn_code = st.text_input("HSN Code", value="7323")
-    boxes = st.text_input("No of Box", value="02 Box")
-    qty_str = st.text_input("Total Qty (e.g., 2500 Pcs)", value="2500 Pcs")
+    item_desc = st.text_area("Product Description", value="")
+    hsn_code = st.text_input("HSN Code", value="")
+    boxes = st.text_input("No of Box", value="")
     
-    # Calculation inputs
-    qty_calc = st.number_input("Quantity (for calculation)", value=2500, min_value=1)
-    rate = st.number_input("Approx. Rate", value=5.00, min_value=0.0)
+    # Naya Layout: Ek hi Quantity box jisme + icon hai (step=1 se aayega)
+    col3, col4 = st.columns(2)
+    with col3:
+        qty = st.number_input("Total Quantity", value=0, min_value=0, step=1)
+    with col4:
+        rate = st.number_input("Approx. Rate", value=0.0, min_value=0.0)
     
     submit = st.form_submit_button("Generate Challan")
 
 # --- Processing & PDF Generation ---
 if submit:
     # Calculations
-    amount = qty_calc * rate
+    amount = qty * rate
     cgst = amount * 0.09
     sgst = amount * 0.09
     total_amount = amount + cgst + sgst
     
-    # Convert total to words
-    amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only."
+    # PDF me print hone ke liye "Pcs" auto-add kar diya
+    qty_display = f"{qty} Pcs" if qty > 0 else ""
     
-    # HTML Template with f-strings for dynamic data
+    # Convert total to words
+    if total_amount > 0:
+        amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only."
+    else:
+        amount_in_words = ""
+    
+    # HTML Template
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -113,7 +121,7 @@ if submit:
                     <td><strong>{item_desc.replace(chr(10), '<br>')}</strong></td>
                     <td style="text-align:center;">{hsn_code}</td>
                     <td style="text-align:center;">{boxes}</td>
-                    <td style="text-align:center;">{qty_str}</td>
+                    <td style="text-align:center;">{qty_display}</td>
                     <td style="text-align:right;">{rate:.2f}</td>
                     <td style="text-align:right;">{amount:.2f}</td>
                 </tr>
@@ -157,12 +165,11 @@ if submit:
     """
     
     # Generate PDF
-    pdf_path = f"Challan_{challan_no}.pdf"
+    pdf_path = f"Challan_{challan_no if challan_no else 'New'}.pdf"
     HTML(string=html_content).write_pdf(pdf_path)
     
     st.success("✅ Challan Successfully Generated!")
     
-    # Provide download button
     with open(pdf_path, "rb") as pdf_file:
         st.download_button(
             label="📄 Download PDF",
