@@ -1,0 +1,3 @@
+streamlit
+weasyprint
+num2words
