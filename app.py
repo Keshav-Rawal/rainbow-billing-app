@@ -16,19 +16,34 @@ with st.form("challan_form"):
         party_name = st.text_input("Dispatch To (Party Name)", value="")
         party_address = st.text_area("Party Address", value="")
         party_gstin = st.text_input("Party GSTIN", value="")
-    
-    with col2:
-        challan_no = st.text_input("Challan No.", value="")
-        challan_date = st.date_input("Date", datetime.date.today())
-        vehicle_no = st.text_input("Vehicle No.", value="")
         
+        # Dispatch To ke andar State aur Code
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            party_state = st.text_input("Party State", value="")
+        with col_p2:
+            party_state_code = st.text_input("Party State Code", value="")
+            
+    with col2:
+        # Challan Details ko 2 hisso mein baant diya
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            challan_no = st.text_input("Challan No.", value="")
+            vehicle_no = st.text_input("Vehicle No.", value="")
+            date_of_supply = st.date_input("Date of Supply", datetime.date.today())
+        with col_c2:
+            challan_date = st.date_input("Challan Date", datetime.date.today())
+            transport_mode = st.text_input("Transport Mode", value="Road")
+            place_of_supply = st.text_input("Place of Supply", value="")
+        
+        st.markdown("---")
         # Rainbow Industries ke apne GST, State aur Code ke liye fields
         owner_gstin = st.text_input("Rainbow Industries GSTIN", value="")
         col_st1, col_st2 = st.columns(2)
         with col_st1:
-            state_name = st.text_input("State", value="UP")
+            state_name = st.text_input("My State", value="UP")
         with col_st2:
-            state_code = st.text_input("State Code", value="09")
+            state_code = st.text_input("My State Code", value="09")
 
     st.subheader("Item Details")
     item_desc = st.text_area("Product Description", value="")
@@ -49,7 +64,8 @@ if submit:
     amount = qty * rate
     cgst = amount * 0.09
     sgst = amount * 0.09
-    total_amount = amount + cgst + sgst
+    total_tax = cgst + sgst  # Naya Calculation: Total Amount of Tax
+    total_amount = amount + total_tax
     
     # PDF me print hone ke liye "Pcs" auto-add
     qty_display = f"{qty} Pcs" if qty > 0 else ""
@@ -104,18 +120,22 @@ if submit:
                         <strong>Dispatch To:</strong><br>
                         <strong>{party_name}</strong><br>
                         {party_address.replace(chr(10), '<br>')}<br>
-                        <strong>GSTIN:</strong> {party_gstin}
+                        <strong>GSTIN:</strong> {party_gstin}<br>
+                        <strong>State:</strong> {party_state} &nbsp;&nbsp;&nbsp; <strong>Code:</strong> {party_state_code}
                     </td>
                     <td style="width: 50%; padding: 0;">
-                        <table style="border:none;">
+                        <table style="border:none; width: 100%;">
                             <tr>
-                                <td style="border:none;"><strong>Challan No:</strong> {challan_no}</td>
-                                <td style="border:none;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td>
+                                <td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td>
+                                <td style="border:none; border-left: 1px solid #aeb6bf; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td>
                             </tr>
                             <tr>
-                                <td style="border:none; border-top: 1px solid #aeb6bf;" colspan="2">
-                                    <strong>Vehicle:</strong> {vehicle_no}<br>
-                                </td>
+                                <td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td>
+                                <td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td>
+                            </tr>
+                            <tr>
+                                <td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply.strftime('%d/%m/%Y')}</td>
+                                <td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td>
                             </tr>
                         </table>
                     </td>
@@ -145,7 +165,7 @@ if submit:
 
             <table style="border-top: 2px solid #2c3e50;">
                 <tr>
-                    <td rowspan="3" style="width:60%; padding-left:10px;">
+                    <td rowspan="5" style="width:60%; padding-left:10px;">
                         <strong>Total Amount in Words:</strong><br>
                         <em>{amount_in_words}</em>
                     </td>
@@ -161,7 +181,10 @@ if submit:
                     <td style="text-align:right;">{sgst:.2f}</td>
                 </tr>
                 <tr>
-                    <td style="background-color:#f8f9fa;"></td>
+                    <td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td>
+                    <td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td>
+                </tr>
+                <tr>
                     <td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td>
                     <td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_amount:.2f}</td>
                 </tr>
