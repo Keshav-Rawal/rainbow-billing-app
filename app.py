@@ -291,4 +291,4 @@ else:
     elif selected_module == "📊 Future Modules":
         st.title("Rainbow Industries ERP Module")
         st.header("🚧 Coming Soon...")
-        st.info("Bhai, yahan par aage chal kar aur bhi naye modules add kiye ja sakte hain. (Jaise: Invoice Generation, Inventory Management, ya Employee Records).")
+        
