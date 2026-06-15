@@ -21,7 +21,7 @@ def get_connection():
         password=st.secrets["mysql"]["password"],
         database=st.secrets["mysql"]["database"],
         connect_timeout=10,
-        use_pure=True  # <-- SEGMENTATION FAULT FIX (The Master Key)
+        use_pure=True  # <-- SEGMENTATION FAULT FIX
     )
 
 def init_db():
@@ -116,9 +116,11 @@ if auth_status == "verified":
 
 if 'company_profile' not in st.session_state:
     st.session_state.company_profile = {
-        "name": "Rainbow Industries", "gstin": "09AAAAA0000A1Z1",
+        "name": "RAINBOW INDUSTRIES", 
+        "gstin": "09AAAAA0000A1Z1", # Aap admin/profile se ise real gstin se badal sakte hain
         "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", 
-        "state": "UP", "state_code": "09"
+        "state": "UP", 
+        "state_code": "09"
     }
 
 is_verified = st.session_state.get("auth_logged_in", False)
@@ -360,24 +362,25 @@ else:
                     amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only." if total_amount > 0 else ""
                     my_company = st.session_state.company_profile
                     
+                    # Exact Match Layout HTML Content
                     html_content = f"""
                     <!DOCTYPE html>
                     <html>
                     <head>
                     <style>
                         @page {{ size: A4; margin: 15mm; }}
-                        body {{ font-family: Arial, sans-serif; font-size: 12px; color: #333; }}
-                        .container {{ border: 2px solid #2c3e50; width: 100%; }}
-                        .header {{ text-align: center; border-bottom: 2px solid #2c3e50; padding: 15px 10px; background-color: #f8f9fa; position: relative; }}
-                        .header h1 {{ margin: 5px 0; color: #2c3e50; font-size: 28px; line-height: 1.2; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }}
-                        .header h2 {{ margin: 0 0 5px 0; color: #2c3e50; font-size: 18px; text-decoration: underline; letter-spacing: 1px; font-weight: bold; }}
-                        .header p {{ margin: 2px 0; font-size: 12px; color: #333; }}
-                        .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #333; line-height: 1.5; }}
+                        body {{ font-family: Arial, sans-serif; font-size: 12px; color: #1c2d42; }}
+                        .container {{ border: 2px solid #1c2d42; width: 100%; }}
+                        .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; }}
+                        .header h2 {{ margin: 0 0 5px 0; color: #1c2d42; font-size: 18px; text-decoration: underline; letter-spacing: 1.5px; font-weight: bold; text-transform: uppercase; }}
+                        .header h1 {{ margin: 5px 0; color: #1c2d42; font-size: 32px; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 900; }}
+                        .header p {{ margin: 3px 0; font-size: 12px; color: #1c2d42; }}
+                        .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #1c2d42; line-height: 1.5; }}
                         table {{ width: 100%; border-collapse: collapse; }}
                         td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }}
-                        .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #2c3e50; border-top: 2px solid #2c3e50; }}
+                        .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }}
                         .spacer-row td {{ height: 150px; border-top: none; border-bottom: none; }}
-                        .footer {{ padding: 10px; height: 100px; border-top: 2px solid #2c3e50; background-color: #f8f9fa; position: relative; }}
+                        .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; background-color: #f8f9fa; position: relative; }}
                         .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
                     </style>
                     </head>
@@ -394,11 +397,11 @@ else:
                                 <p>(An ISO 9001:2015 Certified Company)</p>
                                 <p>{my_company['address']}</p>
                                 <p>Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com</p>
-                                <p style="font-weight: bold; font-size: 13px; margin-top: 5px;">Manufactures of : Plastic Components, Automobiles, Electricals & Electronics</p>
+                                <p style="font-weight: bold; font-size: 13px; margin-top: 5px; text-transform: none;">Manufactures of : Plastic Components, Automobiles, Electricals & Electronics</p>
                             </div>
                             <table>
                                 <tr>
-                                    <td style="width: 50%; border-right: 2px solid #2c3e50;">
+                                    <td style="width: 50%; border-right: 2px solid #1c2d42;">
                                         <strong>Dispatch To:</strong><br>
                                         <strong>{party_name}</strong><br>
                                         {party_address.replace(chr(10), '<br>')}<br>
@@ -440,7 +443,7 @@ else:
                                 </tr>
                             </table>
 
-                            <table style="border-top: 2px solid #2c3e50;">
+                            <table style="border-top: 2px solid #1c2d42;">
                                 <tr>
                                     <td rowspan="5" style="width:60%; padding-left:10px;">
                                         <strong>Total Amount in Words:</strong><br>
