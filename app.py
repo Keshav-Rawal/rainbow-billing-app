@@ -9,84 +9,97 @@ import mysql.connector
 
 st.set_page_config(page_title="Rainbow ERP - SaaS Edition", layout="wide")
 
-# --- MySQL Database Connection Setup ---
-@st.cache_resource(ttl=600) # Har 10 minute mein cache clear hoga
+# --- 1. BULLETPROOF DATABASE FUNCTIONS (Open-Query-Close) ---
+def get_connection():
+    """Naya connection banata hai jab bhi zaroorat ho"""
+    return mysql.connector.connect(
+        host=st.secrets["mysql"]["host"],
+        port=st.secrets["mysql"]["port"],
+        user=st.secrets["mysql"]["user"],
+        password=st.secrets["mysql"]["password"],
+        database=st.secrets["mysql"]["database"],
+        connect_timeout=10
+    )
+
 def init_db():
+    """Tables banata hai (sirf pehli baar)"""
+    if "db_initialized" not in st.session_state:
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    uid VARCHAR(50) PRIMARY KEY,
+                    password VARCHAR(50) NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    name VARCHAR(100) NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS challans (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    created_by VARCHAR(100),
+                    challan_date VARCHAR(20),
+                    challan_no VARCHAR(50),
+                    party_name VARCHAR(100),
+                    amount VARCHAR(50)
+                )
+            """)
+            cursor.execute("SELECT COUNT(*) FROM users")
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
+                               ("boss", "admin123", "superadmin", "Keshav (Master)"))
+            conn.commit()
+            conn.close()
+            st.session_state.db_initialized = True
+        except Exception as e:
+            st.error(f"DB Init Error: {e}")
+
+# Run database setup
+init_db()
+
+def fetch_data(query, params=None):
+    """Database se data lane ke liye"""
     try:
-        conn = mysql.connector.connect(
-            host=st.secrets["mysql"]["host"],
-            port=st.secrets["mysql"]["port"],
-            user=st.secrets["mysql"]["user"],
-            password=st.secrets["mysql"]["password"],
-            database=st.secrets["mysql"]["database"]
-        )
-        cursor = conn.cursor()
-        
-        # 1. Create Users Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                uid VARCHAR(50) PRIMARY KEY,
-                password VARCHAR(50) NOT NULL,
-                role VARCHAR(20) NOT NULL,
-                name VARCHAR(100) NOT NULL
-            )
-        """)
-        
-        # 2. Create Challans Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS challans (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                created_by VARCHAR(100),
-                challan_date VARCHAR(20),
-                challan_no VARCHAR(50),
-                party_name VARCHAR(100),
-                amount VARCHAR(50)
-            )
-        """)
-        
-        # 3. Insert Default Boss User if table is empty
-        cursor.execute("SELECT COUNT(*) FROM users")
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
-                           ("boss", "admin123", "superadmin", "Keshav (Master)"))
-        
-        conn.commit()
-        return conn
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(query, params or ())
+        data = cursor.fetchall()
+        conn.close()
+        return data
     except Exception as e:
-        st.error(f"⚠️ Database Connection Error: {e}")
-        return None
+        st.error(f"Query Error: {e}")
+        return []
 
-# Connect to DB and Auto-Wakeup (Ping) if sleeping
-db_conn = init_db()
-if db_conn:
+def execute_data(query, params):
+    """Database mein data save/delete karne ke liye"""
     try:
-        db_conn.ping(reconnect=True, attempts=3, delay=1)
-    except Exception:
-        # Agar connection poori tarah toot chuka hai, toh naya banayega
-        st.cache_resource.clear()
-        db_conn = init_db()
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        conn.close()
+        return True
+    except mysql.connector.IntegrityError:
+        return "exists"
+    except Exception as e:
+        st.error(f"Execution Error: {e}")
+        return False
 
-def get_users():
-    if db_conn:
-        cursor = db_conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users")
-        return cursor.fetchall()
-    return []
-
-# --- Cookie Manager Setup (Safe Mode) ---
+# --- 2. COOKIE MANAGER (With Safety Net for KeyError) ---
 cookie_manager = stx.CookieManager()
 time.sleep(0.2)
 
-# Safety Net for Cookies (Fix for KeyError)
 auth_status, user_role, user_name = None, None, None
 try:
-    all_cookies = cookie_manager.get_all()
-    if isinstance(all_cookies, dict):
-        auth_status = all_cookies.get("rainbow_erp_auth")
-        user_role = all_cookies.get("rainbow_user_role")
-        user_name = all_cookies.get("rainbow_user_name")
-except Exception:
-    pass
+    auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
+except Exception: pass
+try:
+    user_role = cookie_manager.get(cookie="rainbow_user_role")
+except Exception: pass
+try:
+    user_name = cookie_manager.get(cookie="rainbow_user_name")
+except Exception: pass
 
 # --- Smart Session State Sync ---
 if auth_status == "verified":
@@ -96,7 +109,6 @@ if auth_status == "verified":
     if user_name and "auth_name" not in st.session_state:
         st.session_state.auth_name = user_name
 
-# Temporary Profile State
 if 'company_profile' not in st.session_state:
     st.session_state.company_profile = {
         "name": "Rainbow Industries", "gstin": "09AAAAA0000A1Z1",
@@ -108,44 +120,35 @@ is_verified = st.session_state.get("auth_logged_in", False)
 current_role = st.session_state.get("auth_role", None)
 current_name = st.session_state.get("auth_name", None)
 
-# --- 1. LOGIN SCREEN ---
+# --- 3. LOGIN SCREEN ---
 if not is_verified:
     st.title("☁️ SaaS ERP Platform")
-    if not db_conn:
-        st.error("❌ MySQL database se connection fail ho gaya hai. Kripya Streamlit Secrets check karein.")
-    
     _, login_col, _ = st.columns([1, 2, 1])
     with login_col:
         st.subheader("Login to your Account")
         userid = st.text_input("User ID")
         password = st.text_input("Password", type="password")
         if st.button("Secure Login", type="primary", use_container_width=True):
-            if db_conn:
-                cursor = db_conn.cursor(dictionary=True)
-                cursor.execute("SELECT * FROM users WHERE uid = %s AND password = %s", (userid, password))
-                user_data = cursor.fetchone()
+            user_data = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (userid, password))
+            if user_data:
+                role = user_data[0]["role"]
+                name = user_data[0]["name"]
                 
-                if user_data:
-                    role = user_data["role"]
-                    name = user_data["name"]
-                    
-                    st.session_state.auth_logged_in = True
-                    st.session_state.auth_role = role
-                    st.session_state.auth_name = name
-                    
-                    cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key="set_auth")
-                    cookie_manager.set("rainbow_user_role", role, max_age=2592000, key="set_role")
-                    cookie_manager.set("rainbow_user_name", name, max_age=2592000, key="set_name")
-                    
-                    st.success(f"✅ Login Verified! Welcome {name}...")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid Credentials!")
+                st.session_state.auth_logged_in = True
+                st.session_state.auth_role = role
+                st.session_state.auth_name = name
+                
+                cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key="set_auth")
+                cookie_manager.set("rainbow_user_role", role, max_age=2592000, key="set_role")
+                cookie_manager.set("rainbow_user_name", name, max_age=2592000, key="set_name")
+                
+                st.success(f"✅ Login Verified! Welcome {name}...")
+                time.sleep(0.5)
+                st.rerun()
             else:
-                st.error("Database connection missing!")
+                st.error("❌ Invalid Credentials!")
 
-# --- 2. LOGGED IN SYSTEM ---
+# --- 4. LOGGED IN SYSTEM ---
 else:
     if not current_role:
         st.info("🔄 Syncing Session Module...")
@@ -178,12 +181,11 @@ else:
         if safe_role == "SUPERADMIN":
             st.title("👑 Super Admin Dashboard (MySQL Connected)")
             
-            all_users = get_users()
+            all_users = fetch_data("SELECT * FROM users")
             total_clients = sum(1 for u in all_users if u['role'] == 'customer')
             
-            cursor = db_conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM challans")
-            total_bills = cursor.fetchone()[0]
+            challan_count_data = fetch_data("SELECT COUNT(*) as count FROM challans")
+            total_bills = challan_count_data[0]['count'] if challan_count_data else 0
             
             m1, m2, m3 = st.columns(3)
             m1.metric(label="Total Registered Clients", value=str(total_clients))
@@ -203,15 +205,14 @@ else:
                     
                     if st.form_submit_button("🚀 Create Account Live"):
                         if new_uid and new_pass and new_fullname:
-                            try:
-                                cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
-                                               (new_uid, new_pass, new_role_select, new_fullname))
-                                db_conn.commit()
+                            result = execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
+                                                  (new_uid, new_pass, new_role_select, new_fullname))
+                            if result == "exists":
+                                st.error("❌ Yeh Login ID pehle se exist karti hai!")
+                            elif result:
                                 st.success(f"✅ Account Created! ID: '{new_uid}'")
                                 time.sleep(1)
                                 st.rerun()
-                            except mysql.connector.IntegrityError:
-                                st.error("❌ Yeh Login ID pehle se exist karti hai!")
                         else:
                             st.error("⚠️ Kripya saari fields ko bharein!")
 
@@ -221,9 +222,7 @@ else:
             
             st.markdown("---")
             st.subheader("📜 Live Platform Challan Monitor")
-            cursor = db_conn.cursor(dictionary=True)
-            cursor.execute("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans ORDER BY id DESC")
-            all_challans = cursor.fetchall()
+            all_challans = fetch_data("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans ORDER BY id DESC")
             if not all_challans:
                 st.info("ℹ️ Abhi tak kisi ne challan nahi banaya hai.")
             else:
@@ -255,9 +254,7 @@ else:
 
             elif selected_module == "📜 Challan History":
                 st.title("📜 MySQL Challan History Register")
-                cursor = db_conn.cursor(dictionary=True)
-                cursor.execute("SELECT challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
-                user_challans = cursor.fetchall()
+                user_challans = fetch_data("SELECT challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
                 
                 if not user_challans:
                     st.info("ℹ️ Abhi tak koi challan generate nahi kiya gaya hai.")
@@ -328,15 +325,14 @@ else:
                     total_amount = total_amount_before_tax + total_tax
                     amt_str = f"₹{total_amount:.2f}"
                     
-                    try:
-                        cursor = db_conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO challans (created_by, challan_date, challan_no, party_name, amount) 
-                            VALUES (%s, %s, %s, %s, %s)
-                        """, (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, amt_str))
-                        db_conn.commit()
-                    except Exception as e:
-                        st.error(f"Failed to save in DB: {e}")
+                    # NAYA SAFER DB INSERT METHOD
+                    saved = execute_data("""
+                        INSERT INTO challans (created_by, challan_date, challan_no, party_name, amount) 
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, amt_str))
+                    
+                    if not saved:
+                        st.error("⚠️ Failed to save in DB, but generating PDF anyway...")
                     
                     items_html = ""
                     for idx, item in enumerate(items_data):
@@ -476,7 +472,8 @@ else:
                     pdf_path = f"Challan_{challan_no if challan_no else 'New'}.pdf"
                     HTML(string=html_content).write_pdf(pdf_path)
                     
-                    st.success("✅ Challan Generated & Saved to MySQL Database!")
+                    if saved:
+                        st.success("✅ Challan Generated & Saved to MySQL Database!")
                     
                     with open(pdf_path, "rb") as pdf_file:
                         st.download_button(
