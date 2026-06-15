@@ -1,3 +1,4 @@
 streamlit
 weasyprint
 num2words
+extra-streamlit-components
