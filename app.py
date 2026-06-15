@@ -5,25 +5,76 @@ import pandas as pd
 from weasyprint import HTML
 from num2words import num2words
 import datetime
+import mysql.connector
 
 st.set_page_config(page_title="Rainbow ERP - SaaS Edition", layout="wide")
 
+# --- MySQL Database Connection Setup ---
+@st.cache_resource
+def init_db():
+    try:
+        conn = mysql.connector.connect(
+            host=st.secrets["mysql"]["host"],
+            port=st.secrets["mysql"]["port"],  # Port line jodi gayi hai
+            user=st.secrets["mysql"]["user"],
+            password=st.secrets["mysql"]["password"],
+            database=st.secrets["mysql"]["database"]
+        )
+        cursor = conn.cursor()
+        
+        # 1. Create Users Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                uid VARCHAR(50) PRIMARY KEY,
+                password VARCHAR(50) NOT NULL,
+                role VARCHAR(20) NOT NULL,
+                name VARCHAR(100) NOT NULL
+            )
+        """)
+        
+        # 2. Create Challans Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS challans (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                created_by VARCHAR(100),
+                challan_date VARCHAR(20),
+                challan_no VARCHAR(50),
+                party_name VARCHAR(100),
+                amount VARCHAR(50)
+            )
+        """)
+        
+        # 3. Insert Default Boss User if table is empty
+        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
+                           ("boss", "admin123", "superadmin", "Keshav (Master)"))
+        
+        conn.commit()
+        return conn
+    except Exception as e:
+        st.error(f"⚠️ Database Connection Error: {e}")
+        return None
+
+# Connect to DB
+db_conn = init_db()
+
+def get_users():
+    if db_conn:
+        cursor = db_conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users")
+        return cursor.fetchall()
+    return []
+
 # --- Cookie Manager Setup ---
 cookie_manager = stx.CookieManager()
-time.sleep(0.2)  # Cookie read karne ke liye thoda extra time diya hai
+time.sleep(0.2)
 
 auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
 user_role = cookie_manager.get(cookie="rainbow_user_role")
 user_name = cookie_manager.get(cookie="rainbow_user_name")
 
-# --- Dummy Users Database ---
-USERS_DB = {
-    "boss": {"pass": "admin123", "role": "superadmin", "name": "Keshav (Master)"},
-    "partner": {"pass": "partner123", "role": "superadmin", "name": "Manager"},
-    "client": {"pass": "client123", "role": "customer", "name": "Demo User Factory"}
-}
-
-# --- Smart Session State Sync (Fix for Blank Page) ---
+# --- Smart Session State Sync ---
 if auth_status == "verified":
     st.session_state.auth_logged_in = True
     if user_role and "auth_role" not in st.session_state:
@@ -31,16 +82,12 @@ if auth_status == "verified":
     if user_name and "auth_name" not in st.session_state:
         st.session_state.auth_name = user_name
 
-# --- Temporary Session Memory for Data ---
-if 'challan_history' not in st.session_state:
-    st.session_state.challan_history = []
+# Temporary Profile State (Can be moved to DB later)
 if 'company_profile' not in st.session_state:
     st.session_state.company_profile = {
-        "name": "Rainbow Industries",
-        "gstin": "09AAAAA0000A1Z1",
-        "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207",
-        "state": "UP",
-        "state_code": "09"
+        "name": "Rainbow Industries", "gstin": "09AAAAA0000A1Z1",
+        "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", 
+        "state": "UP", "state_code": "09"
     }
 
 is_verified = st.session_state.get("auth_logged_in", False)
@@ -50,44 +97,46 @@ current_name = st.session_state.get("auth_name", None)
 # --- 1. LOGIN SCREEN ---
 if not is_verified:
     st.title("☁️ SaaS ERP Platform")
-    _, login_col, _ = st.columns([1, 2, 1])
+    if not db_conn:
+        st.error("❌ MySQL database se connection fail ho gaya hai. Kripya Streamlit Secrets check karein.")
     
+    _, login_col, _ = st.columns([1, 2, 1])
     with login_col:
         st.subheader("Login to your Account")
-        userid = st.text_input("User ID", value="")
-        password = st.text_input("Password", type="password", value="")
-        login_submit = st.button("Secure Login", type="primary", use_container_width=True)
-        
-        if login_submit:
-            if userid in USERS_DB and USERS_DB[userid]["pass"] == password:
-                role = USERS_DB[userid]["role"]
-                name = USERS_DB[userid]["name"]
+        userid = st.text_input("User ID")
+        password = st.text_input("Password", type="password")
+        if st.button("Secure Login", type="primary", use_container_width=True):
+            if db_conn:
+                cursor = db_conn.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM users WHERE uid = %s AND password = %s", (userid, password))
+                user_data = cursor.fetchone()
                 
-                # Session backup (Instant work)
-                st.session_state.auth_logged_in = True
-                st.session_state.auth_role = role
-                st.session_state.auth_name = name
-                
-                # Browser Cookies save
-                cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key="set_auth")
-                cookie_manager.set("rainbow_user_role", role, max_age=2592000, key="set_role")
-                cookie_manager.set("rainbow_user_name", name, max_age=2592000, key="set_name")
-                
-                st.success(f"✅ Login Verified! Welcome {name}...")
-                time.sleep(0.5)
-                st.rerun()
+                if user_data:
+                    role = user_data["role"]
+                    name = user_data["name"]
+                    
+                    st.session_state.auth_logged_in = True
+                    st.session_state.auth_role = role
+                    st.session_state.auth_name = name
+                    
+                    cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key="set_auth")
+                    cookie_manager.set("rainbow_user_role", role, max_age=2592000, key="set_role")
+                    cookie_manager.set("rainbow_user_name", name, max_age=2592000, key="set_name")
+                    
+                    st.success(f"✅ Login Verified! Welcome {name}...")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid Credentials!")
             else:
-                st.error("❌ Invalid Credentials!")
+                st.error("Database connection missing!")
 
 # --- 2. LOGGED IN SYSTEM ---
 else:
-    # Agar login cookies sync hone mein deri ho rhi hai toh loading dikhayega
     if not current_role:
-        _, load_col, _ = st.columns([1, 2, 1])
-        with load_col:
-            st.info("🔄 Loading Dashboard, please wait a moment...")
-            time.sleep(0.5)
-            st.rerun()
+        st.info("🔄 Syncing Session Module...")
+        time.sleep(0.5)
+        st.rerun()
     else:
         safe_name = current_name if current_name else "User"
         safe_role = current_role.upper()
@@ -98,7 +147,10 @@ else:
         st.sidebar.markdown("---")
         
         if st.sidebar.button("🔒 Logout"):
-            st.session_state.clear()
+            if "auth_logged_in" in st.session_state: del st.session_state.auth_logged_in
+            if "auth_role" in st.session_state: del st.session_state.auth_role
+            if "auth_name" in st.session_state: del st.session_state.auth_name
+            
             cookie_manager.delete("rainbow_erp_auth", key="del_auth")
             cookie_manager.delete("rainbow_user_role", key="del_role")
             cookie_manager.delete("rainbow_user_name", key="del_name")
@@ -110,31 +162,68 @@ else:
         # SUPER ADMIN PANEL
         # ==========================================
         if safe_role == "SUPERADMIN":
-            st.title("👑 Super Admin Dashboard")
+            st.title("👑 Super Admin Dashboard (MySQL Connected)")
+            
+            all_users = get_users()
+            total_clients = sum(1 for u in all_users if u['role'] == 'customer')
+            
+            cursor = db_conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM challans")
+            total_bills = cursor.fetchone()[0]
+            
             m1, m2, m3 = st.columns(3)
-            m1.metric(label="Total Active Clients", value="142", delta="+3 this week")
-            m2.metric(label="Monthly Revenue", value="₹42,500", delta="+15%")
-            m3.metric(label="Platform Total Bills", value=str(8432 + len(st.session_state.challan_history)))
+            m1.metric(label="Total Registered Clients", value=str(total_clients))
+            m2.metric(label="Simulated Monthly Revenue", value=f"₹{total_clients * 2499}")
+            m3.metric(label="Platform Total Bills", value=str(total_bills))
             
             st.markdown("---")
-            st.subheader("👥 Client Management")
-            client_data = pd.DataFrame({
-                "Client ID": ["CLI-001", "CLI-002", "CLI-003"],
-                "Company Name": ["A.K. Plastics", "Demo Factory", "Sharma Traders"],
-                "Plan": ["Pro (₹2499/yr)", "Free Trial", "Pro (₹2499/yr)"],
-                "Status": ["Active", "Active", "Suspended"]
-            })
-            st.dataframe(client_data, use_container_width=True)
+            col_left, col_right = st.columns([1, 1])
+            
+            with col_left:
+                st.subheader("➕ Create New Account")
+                with st.form("create_user_form", clear_on_submit=True):
+                    new_uid = st.text_input("Username / Login ID")
+                    new_pass = st.text_input("Password", type="password")
+                    new_fullname = st.text_input("Full Name / Factory Name")
+                    new_role_select = st.selectbox("Role", ["customer", "superadmin"])
+                    
+                    if st.form_submit_button("🚀 Create Account Live"):
+                        if new_uid and new_pass and new_fullname:
+                            try:
+                                cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
+                                               (new_uid, new_pass, new_role_select, new_fullname))
+                                db_conn.commit()
+                                st.success(f"✅ Account Created! ID: '{new_uid}'")
+                                time.sleep(1)
+                                st.rerun()
+                            except mysql.connector.IntegrityError:
+                                st.error("❌ Yeh Login ID pehle se exist karti hai!")
+                        else:
+                            st.error("⚠️ Kripya saari fields ko bharein!")
+
+            with col_right:
+                st.subheader("👥 Live User Database")
+                st.dataframe(pd.DataFrame(all_users), use_container_width=True)
+            
+            st.markdown("---")
+            st.subheader("📜 Live Platform Challan Monitor")
+            cursor = db_conn.cursor(dictionary=True)
+            cursor.execute("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans ORDER BY id DESC")
+            all_challans = cursor.fetchall()
+            if not all_challans:
+                st.info("ℹ️ Abhi tak kisi ne challan nahi banaya hai.")
+            else:
+                st.dataframe(pd.DataFrame(all_challans), use_container_width=True)
 
         # ==========================================
-        # CUSTOMER ERP (With History & PDF)
+        # CUSTOMER ERP
         # ==========================================
         elif safe_role == "CUSTOMER":
             selected_module = st.sidebar.radio("Menu", ["📝 Make New Challan", "📜 Challan History", "⚙️ Company Profile"])
             
             if selected_module == "⚙️ Company Profile":
                 st.title("⚙️ Company Profile Settings")
-                st.info("SaaS Module: Yahan aapki factory ki details save hoti hain jo PDF par print hongi.")
+                st.info("Ye details PDF par print hongi.")
                 
                 c_name = st.text_input("Company Name", value=st.session_state.company_profile["name"])
                 c_gst = st.text_input("GSTIN Number", value=st.session_state.company_profile["gstin"])
@@ -144,19 +233,22 @@ else:
                 with col_s2: c_state_code = st.text_input("State Code", value=st.session_state.company_profile["state_code"])
                 
                 if st.button("💾 Save Profile", type="primary"):
-                    st.session_state.company_profile = {
-                        "name": c_name, "gstin": c_gst, "address": c_address, "state": c_state, "state_code": c_state_code
-                    }
+                    st.session_state.company_profile.update({
+                        "name": c_name, "gstin": c_gst, "address": c_address, 
+                        "state": c_state, "state_code": c_state_code
+                    })
                     st.success("✅ Profile Updated Successfully!")
 
             elif selected_module == "📜 Challan History":
-                st.title("📜 Challan History Register")
+                st.title("📜 MySQL Challan History Register")
+                cursor = db_conn.cursor(dictionary=True)
+                cursor.execute("SELECT challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
+                user_challans = cursor.fetchall()
                 
-                if len(st.session_state.challan_history) == 0:
+                if not user_challans:
                     st.info("ℹ️ Abhi tak koi challan generate nahi kiya gaya hai.")
                 else:
-                    df_history = pd.DataFrame(st.session_state.challan_history)
-                    st.dataframe(df_history, use_container_width=True)
+                    st.dataframe(pd.DataFrame(user_challans), use_container_width=True)
 
             elif selected_module == "📝 Make New Challan":
                 st.title("📝 Delivery Challan Generator")
@@ -212,7 +304,7 @@ else:
                     })
 
                 st.markdown("---")
-                submit = st.button("🚀 Generate Challan PDF", type="primary", use_container_width=True)
+                submit = st.button("🚀 Generate Challan PDF & Save", type="primary", use_container_width=True)
 
                 if submit:
                     total_amount_before_tax = sum(item['amount'] for item in items_data)
@@ -220,15 +312,18 @@ else:
                     sgst = total_amount_before_tax * 0.09
                     total_tax = cgst + sgst
                     total_amount = total_amount_before_tax + total_tax
+                    amt_str = f"₹{total_amount:.2f}"
                     
-                    # --- Save to History ---
-                    new_record = {
-                        "Date": challan_date.strftime('%d/%m/%Y'),
-                        "Challan No": challan_no,
-                        "Party Name": party_name,
-                        "Amount": f"₹{total_amount:.2f}"
-                    }
-                    st.session_state.challan_history.append(new_record)
+                    # NAYA: MySQL me save karna
+                    try:
+                        cursor = db_conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO challans (created_by, challan_date, challan_no, party_name, amount) 
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, amt_str))
+                        db_conn.commit()
+                    except Exception as e:
+                        st.error(f"Failed to save in DB: {e}")
                     
                     items_html = ""
                     for idx, item in enumerate(items_data):
@@ -246,8 +341,6 @@ else:
                         """
                         
                     amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only." if total_amount > 0 else ""
-                    
-                    # Fetching details from Profile module
                     my_company = st.session_state.company_profile
                     
                     html_content = f"""
@@ -363,7 +456,6 @@ else:
                                 </div>
                             </div>
                         </div>
-                    </div>
                     </body>
                     </html>
                     """
@@ -371,7 +463,7 @@ else:
                     pdf_path = f"Challan_{challan_no if challan_no else 'New'}.pdf"
                     HTML(string=html_content).write_pdf(pdf_path)
                     
-                    st.success("✅ Challan Generated & Saved in History!")
+                    st.success("✅ Challan Generated & Saved to MySQL Database!")
                     
                     with open(pdf_path, "rb") as pdf_file:
                         st.download_button(
