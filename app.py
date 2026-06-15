@@ -30,6 +30,7 @@ def init_db():
         try:
             conn = get_connection()
             cursor = conn.cursor()
+            # 1. Users Table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     uid VARCHAR(50) PRIMARY KEY,
@@ -38,6 +39,7 @@ def init_db():
                     name VARCHAR(100) NOT NULL
                 )
             """)
+            # 2. Challans Table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS challans (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -46,6 +48,20 @@ def init_db():
                     challan_no VARCHAR(50),
                     party_name VARCHAR(100),
                     amount VARCHAR(50)
+                )
+            """)
+            # 3. Dynamic Company Profiles Table (New Feature)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS company_profiles (
+                    uid VARCHAR(50) PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    gstin VARCHAR(50),
+                    address TEXT,
+                    state VARCHAR(50),
+                    state_code VARCHAR(20),
+                    tagline VARCHAR(200),
+                    contact VARCHAR(200),
+                    manufacturing VARCHAR(255)
                 )
             """)
             # Default Master Boss
@@ -90,13 +106,31 @@ def execute_data(query, params):
         st.error(f"Execution Error: {e}")
         return False
 
+def get_company_profile(uid):
+    """Database se specific company ki profile nikalna (With Rainbow Fallback)"""
+    data = fetch_data("SELECT * FROM company_profiles WHERE uid = %s", (uid,))
+    if data:
+        return data[0]
+    else:
+        # Default Rainbow Industries configuration if empty
+        return {
+            "name": "RAINBOW INDUSTRIES",
+            "gstin": "09AAAAA0000A1Z1",
+            "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207",
+            "state": "UP",
+            "state_code": "09",
+            "tagline": "(An ISO 9001:2015 Certified Company)",
+            "contact": "Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com",
+            "manufacturing": "Manufactures of : Plastic Components, Automobiles, Electricals & Electronics"
+        }
+
 # ==========================================
 # 2. COOKIE & SESSION MANAGER
 # ==========================================
 cookie_manager = stx.CookieManager()
 time.sleep(0.2)
 
-auth_status, user_role, user_name = None, None, None
+auth_status, user_role, user_name, user_uid = None, None, None, None
 try:
     auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
 except Exception: pass
@@ -106,6 +140,9 @@ except Exception: pass
 try:
     user_name = cookie_manager.get(cookie="rainbow_user_name")
 except Exception: pass
+try:
+    user_uid = cookie_manager.get(cookie="rainbow_user_uid")
+except Exception: pass
 
 if auth_status == "verified":
     st.session_state.auth_logged_in = True
@@ -113,19 +150,13 @@ if auth_status == "verified":
         st.session_state.auth_role = user_role
     if user_name and "auth_name" not in st.session_state:
         st.session_state.auth_name = user_name
-
-if 'company_profile' not in st.session_state:
-    st.session_state.company_profile = {
-        "name": "RAINBOW INDUSTRIES", 
-        "gstin": "09AAAAA0000A1Z1", # Aap admin/profile se ise real gstin se badal sakte hain
-        "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", 
-        "state": "UP", 
-        "state_code": "09"
-    }
+    if user_uid and "auth_uid" not in st.session_state:
+        st.session_state.auth_uid = user_uid
 
 is_verified = st.session_state.get("auth_logged_in", False)
 current_role = st.session_state.get("auth_role", None)
 current_name = st.session_state.get("auth_name", None)
+current_uid = st.session_state.get("auth_uid", None)
 
 # ==========================================
 # 3. LOGIN SCREEN
@@ -142,14 +173,17 @@ if not is_verified:
             if user_data:
                 role = user_data[0]["role"]
                 name = user_data[0]["name"]
+                uid = user_data[0]["uid"]
                 
                 st.session_state.auth_logged_in = True
                 st.session_state.auth_role = role
                 st.session_state.auth_name = name
+                st.session_state.auth_uid = uid
                 
                 cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key="set_auth")
                 cookie_manager.set("rainbow_user_role", role, max_age=2592000, key="set_role")
                 cookie_manager.set("rainbow_user_name", name, max_age=2592000, key="set_name")
+                cookie_manager.set("rainbow_user_uid", uid, max_age=2592000, key="set_uid")
                 
                 st.success(f"✅ Login Verified! Welcome {name}...")
                 time.sleep(0.5)
@@ -161,7 +195,7 @@ if not is_verified:
 # 4. LOGGED IN SYSTEM (DASHBOARD)
 # ==========================================
 else:
-    if not current_role:
+    if not current_role or not current_uid:
         st.info("🔄 Syncing Session Module...")
         time.sleep(0.5)
         st.rerun()
@@ -178,13 +212,18 @@ else:
             if "auth_logged_in" in st.session_state: del st.session_state.auth_logged_in
             if "auth_role" in st.session_state: del st.session_state.auth_role
             if "auth_name" in st.session_state: del st.session_state.auth_name
+            if "auth_uid" in st.session_state: del st.session_state.auth_uid
             
             cookie_manager.delete("rainbow_erp_auth", key="del_auth")
             cookie_manager.delete("rainbow_user_role", key="del_role")
             cookie_manager.delete("rainbow_user_name", key="del_name")
+            cookie_manager.delete("rainbow_user_uid", key="del_uid")
             st.success("Logging out...")
             time.sleep(0.5)
             st.rerun()
+
+        # Fetch current dynamic company profile from database
+        my_company = get_company_profile(current_uid)
 
         # ----------------------------------------
         # A. SUPER ADMIN PANEL
@@ -246,22 +285,35 @@ else:
             selected_module = st.sidebar.radio("Menu", ["📝 Make New Challan", "📜 Challan History", "⚙️ Company Profile"])
             
             if selected_module == "⚙️ Company Profile":
-                st.title("⚙️ Company Profile Settings")
-                st.info("Ye details PDF par print hongi.")
+                st.title("⚙️ Dynamic Company Profile Settings")
+                st.info("Yahan jo details aap bherenge, wo PDF Invoice Header layout mein bilkul fit ho jayengi.")
                 
-                c_name = st.text_input("Company Name", value=st.session_state.company_profile["name"])
-                c_gst = st.text_input("GSTIN Number", value=st.session_state.company_profile["gstin"])
-                c_address = st.text_area("Registered Address", value=st.session_state.company_profile["address"])
+                c_name = st.text_input("Company/Factory Name", value=my_company["name"])
+                c_tagline = st.text_input("Tagline / ISO Text (e.g., An ISO 9001:2015 Certified Company)", value=my_company.get("tagline", ""))
+                c_gst = st.text_input("GSTIN Number", value=my_company["gstin"])
+                c_address = st.text_area("Registered Address", value=my_company["address"])
+                
                 col_s1, col_s2 = st.columns(2)
-                with col_s1: c_state = st.text_input("State", value=st.session_state.company_profile["state"])
-                with col_s2: c_state_code = st.text_input("State Code", value=st.session_state.company_profile["state_code"])
+                with col_s1: c_state = st.text_input("State", value=my_company["state"])
+                with col_s2: c_state_code = st.text_input("State Code", value=my_company["state_code"])
                 
-                if st.button("💾 Save Profile", type="primary"):
-                    st.session_state.company_profile.update({
-                        "name": c_name, "gstin": c_gst, "address": c_address, 
-                        "state": c_state, "state_code": c_state_code
-                    })
-                    st.success("✅ Profile Updated Successfully!")
+                c_contact = st.text_input("Contact Lines (e.g., Mob.: 9711325563 | Email: ...)", value=my_company.get("contact", ""))
+                c_manufacturing = st.text_input("Business Scope (e.g., Manufactures of : Plastic Components...)", value=my_company.get("manufacturing", ""))
+                
+                if st.button("💾 Save Profile Permanently to Database", type="primary"):
+                    # Save profile inside MySQL company_profiles table (Insert or Update logic)
+                    saved = execute_data("""
+                        INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE 
+                        name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s
+                    """, (current_uid, c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing,
+                          c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing))
+                    
+                    if saved:
+                        st.success("✅ Profile Updated Live in MySQL Database!")
+                        time.sleep(1)
+                        st.rerun()
 
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History Register")
@@ -360,9 +412,8 @@ else:
                         """
                         
                     amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only." if total_amount > 0 else ""
-                    my_company = st.session_state.company_profile
                     
-                    # Exact Match Layout HTML Content
+                    # 100% Dynamic HTML Content with Exact Font / Layout Specifications
                     html_content = f"""
                     <!DOCTYPE html>
                     <html>
@@ -394,10 +445,10 @@ else:
                                 </div>
                                 <h2>DELIVERY CHALLAN</h2>
                                 <h1>{my_company['name']}</h1>
-                                <p>(An ISO 9001:2015 Certified Company)</p>
+                                <p>{my_company['tagline']}</p>
                                 <p>{my_company['address']}</p>
-                                <p>Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com</p>
-                                <p style="font-weight: bold; font-size: 13px; margin-top: 5px; text-transform: none;">Manufactures of : Plastic Components, Automobiles, Electricals & Electronics</p>
+                                <p>{my_company['contact']}</p>
+                                <p style="font-weight: bold; font-size: 13px; margin-top: 5px;">{my_company['manufacturing']}</p>
                             </div>
                             <table>
                                 <tr>
