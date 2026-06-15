@@ -50,9 +50,12 @@ if auth_status != "verified":
             if userid in USERS_DB and USERS_DB[userid]["pass"] == password:
                 role = USERS_DB[userid]["role"]
                 name = USERS_DB[userid]["name"]
-                cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000)
-                cookie_manager.set("rainbow_user_role", role, max_age=2592000)
-                cookie_manager.set("rainbow_user_name", name, max_age=2592000)
+                
+                # NAYA: Unique keys ke sath cookies save ho rahi hain
+                cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key="set_auth")
+                cookie_manager.set("rainbow_user_role", role, max_age=2592000, key="set_role")
+                cookie_manager.set("rainbow_user_name", name, max_age=2592000, key="set_name")
+                
                 st.success(f"✅ Login Verified! Welcome {name}...")
                 time.sleep(0.5)
                 st.rerun()
@@ -61,20 +64,20 @@ if auth_status != "verified":
 
 # --- 2. LOGGED IN SYSTEM ---
 else:
-    st.sidebar.title("☁️ ERP System")
-    
-    # Safe check lagaya hai taaki agar data None ho toh error na aaye
+    # NAYA: Safe variables taaki AttributeError na aaye
     safe_name = user_name if user_name else "User"
     safe_role = user_role.upper() if user_role else "GUEST"
-    
+
+    st.sidebar.title("☁️ ERP System")
     st.sidebar.markdown(f"**Welcome:** {safe_name}")
     st.sidebar.markdown(f"**Role:** {safe_role}")
     st.sidebar.markdown("---")
     
     if st.sidebar.button("🔒 Logout"):
-        cookie_manager.delete("rainbow_erp_auth")
-        cookie_manager.delete("rainbow_user_role")
-        cookie_manager.delete("rainbow_user_name")
+        # NAYA: Unique keys ke sath cookies delete ho rahi hain
+        cookie_manager.delete("rainbow_erp_auth", key="del_auth")
+        cookie_manager.delete("rainbow_user_role", key="del_role")
+        cookie_manager.delete("rainbow_user_name", key="del_name")
         st.success("Logging out...")
         time.sleep(0.5)
         st.rerun()
@@ -82,7 +85,7 @@ else:
     # ==========================================
     # SUPER ADMIN PANEL
     # ==========================================
-    if user_role == "superadmin":
+    if safe_role == "SUPERADMIN":
         st.title("👑 Super Admin Dashboard")
         m1, m2, m3 = st.columns(3)
         m1.metric(label="Total Active Clients", value="142", delta="+3 this week")
@@ -102,7 +105,7 @@ else:
     # ==========================================
     # CUSTOMER ERP (With History & PDF)
     # ==========================================
-    elif user_role == "customer":
+    elif safe_role == "CUSTOMER":
         selected_module = st.sidebar.radio("Menu", ["📝 Make New Challan", "📜 Challan History", "⚙️ Company Profile"])
         
         if selected_module == "⚙️ Company Profile":
