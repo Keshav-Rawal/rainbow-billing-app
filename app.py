@@ -62,8 +62,13 @@ if auth_status != "verified":
 # --- 2. LOGGED IN SYSTEM ---
 else:
     st.sidebar.title("☁️ ERP System")
-    st.sidebar.markdown(f"**Welcome:** {user_name}")
-    st.sidebar.markdown(f"**Role:** {user_role.upper()}")
+    
+    # Safe check lagaya hai taaki agar data None ho toh error na aaye
+    safe_name = user_name if user_name else "User"
+    safe_role = user_role.upper() if user_role else "GUEST"
+    
+    st.sidebar.markdown(f"**Welcome:** {safe_name}")
+    st.sidebar.markdown(f"**Role:** {safe_role}")
     st.sidebar.markdown("---")
     
     if st.sidebar.button("🔒 Logout"):
