@@ -2,3 +2,4 @@ streamlit
 weasyprint
 num2words
 extra-streamlit-components
+mysql-connector-python
