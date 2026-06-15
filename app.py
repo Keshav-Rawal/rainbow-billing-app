@@ -369,10 +369,10 @@ else:
                         body {{ font-family: Arial, sans-serif; font-size: 12px; color: #333; }}
                         .container {{ border: 2px solid #2c3e50; width: 100%; }}
                         .header {{ text-align: center; border-bottom: 2px solid #2c3e50; padding: 15px 10px; background-color: #f8f9fa; position: relative; }}
-                        .header h1 {{ margin: 5px 0; color: #2c3e50; font-size: 26px; line-height: 1.2; text-transform: uppercase; }}
-                        .header h2 {{ margin: 0 0 5px 0; color: #2c3e50; font-size: 18px; text-decoration: underline; letter-spacing: 1px; }}
-                        .header p {{ margin: 3px 0; font-size: 11px; }}
-                        .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 11px; color: #555; line-height: 1.4; }}
+                        .header h1 {{ margin: 5px 0; color: #2c3e50; font-size: 28px; line-height: 1.2; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }}
+                        .header h2 {{ margin: 0 0 5px 0; color: #2c3e50; font-size: 18px; text-decoration: underline; letter-spacing: 1px; font-weight: bold; }}
+                        .header p {{ margin: 2px 0; font-size: 12px; color: #333; }}
+                        .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #333; line-height: 1.5; }}
                         table {{ width: 100%; border-collapse: collapse; }}
                         td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }}
                         .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #2c3e50; border-top: 2px solid #2c3e50; }}
@@ -391,7 +391,10 @@ else:
                                 </div>
                                 <h2>DELIVERY CHALLAN</h2>
                                 <h1>{my_company['name']}</h1>
+                                <p>(An ISO 9001:2015 Certified Company)</p>
                                 <p>{my_company['address']}</p>
+                                <p>Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com</p>
+                                <p style="font-weight: bold; font-size: 13px; margin-top: 5px;">Manufactures of : Plastic Components, Automobiles, Electricals & Electronics</p>
                             </div>
                             <table>
                                 <tr>
