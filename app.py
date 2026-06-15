@@ -50,7 +50,7 @@ def init_db():
                     amount VARCHAR(50)
                 )
             """)
-            # 3. Dynamic Company Profiles Table (New Feature)
+            # 3. Dynamic Company Profiles Table (Multi-Tenancy SaaS)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS company_profiles (
                     uid VARCHAR(50) PRIMARY KEY,
@@ -195,9 +195,12 @@ if not is_verified:
 # 4. LOGGED IN SYSTEM (DASHBOARD)
 # ==========================================
 else:
+    # ⚠️ SMART SYNC FIX: Agar purani aadhi cookie milegi, toh auto-reset karke bahar nikal dega
     if not current_role or not current_uid:
-        st.info("🔄 Syncing Session Module...")
-        time.sleep(0.5)
+        st.warning("⚠️ System Update: Old session found. Resetting... Please wait.")
+        cookie_manager.delete("rainbow_erp_auth", key="force_logout")
+        if "auth_logged_in" in st.session_state: del st.session_state.auth_logged_in
+        time.sleep(1.5)
         st.rerun()
     else:
         safe_name = current_name if current_name else "User"
@@ -301,7 +304,7 @@ else:
                 c_manufacturing = st.text_input("Business Scope (e.g., Manufactures of : Plastic Components...)", value=my_company.get("manufacturing", ""))
                 
                 if st.button("💾 Save Profile Permanently to Database", type="primary"):
-                    # Save profile inside MySQL company_profiles table (Insert or Update logic)
+                    # Save profile inside MySQL company_profiles table
                     saved = execute_data("""
                         INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -413,7 +416,7 @@ else:
                         
                     amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only." if total_amount > 0 else ""
                     
-                    # 100% Dynamic HTML Content with Exact Font / Layout Specifications
+                    # 100% Dynamic HTML Content
                     html_content = f"""
                     <!DOCTYPE html>
                     <html>
