@@ -10,12 +10,12 @@ import mysql.connector
 st.set_page_config(page_title="Rainbow ERP - SaaS Edition", layout="wide")
 
 # --- MySQL Database Connection Setup ---
-@st.cache_resource
+@st.cache_resource(ttl=600) # Har 10 minute mein cache clear hoga
 def init_db():
     try:
         conn = mysql.connector.connect(
             host=st.secrets["mysql"]["host"],
-            port=st.secrets["mysql"]["port"],  # Port line jodi gayi hai
+            port=st.secrets["mysql"]["port"],
             user=st.secrets["mysql"]["user"],
             password=st.secrets["mysql"]["password"],
             database=st.secrets["mysql"]["database"]
@@ -56,8 +56,15 @@ def init_db():
         st.error(f"⚠️ Database Connection Error: {e}")
         return None
 
-# Connect to DB
+# Connect to DB and Auto-Wakeup (Ping) if sleeping
 db_conn = init_db()
+if db_conn:
+    try:
+        db_conn.ping(reconnect=True, attempts=3, delay=1)
+    except Exception:
+        # Agar connection poori tarah toot chuka hai, toh naya banayega
+        st.cache_resource.clear()
+        db_conn = init_db()
 
 def get_users():
     if db_conn:
@@ -66,13 +73,20 @@ def get_users():
         return cursor.fetchall()
     return []
 
-# --- Cookie Manager Setup ---
+# --- Cookie Manager Setup (Safe Mode) ---
 cookie_manager = stx.CookieManager()
 time.sleep(0.2)
 
-auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
-user_role = cookie_manager.get(cookie="rainbow_user_role")
-user_name = cookie_manager.get(cookie="rainbow_user_name")
+# Safety Net for Cookies (Fix for KeyError)
+auth_status, user_role, user_name = None, None, None
+try:
+    all_cookies = cookie_manager.get_all()
+    if isinstance(all_cookies, dict):
+        auth_status = all_cookies.get("rainbow_erp_auth")
+        user_role = all_cookies.get("rainbow_user_role")
+        user_name = all_cookies.get("rainbow_user_name")
+except Exception:
+    pass
 
 # --- Smart Session State Sync ---
 if auth_status == "verified":
@@ -82,7 +96,7 @@ if auth_status == "verified":
     if user_name and "auth_name" not in st.session_state:
         st.session_state.auth_name = user_name
 
-# Temporary Profile State (Can be moved to DB later)
+# Temporary Profile State
 if 'company_profile' not in st.session_state:
     st.session_state.company_profile = {
         "name": "Rainbow Industries", "gstin": "09AAAAA0000A1Z1",
@@ -314,7 +328,6 @@ else:
                     total_amount = total_amount_before_tax + total_tax
                     amt_str = f"₹{total_amount:.2f}"
                     
-                    # NAYA: MySQL me save karna
                     try:
                         cursor = db_conn.cursor()
                         cursor.execute("""
