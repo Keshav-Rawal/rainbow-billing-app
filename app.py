@@ -9,16 +9,19 @@ import mysql.connector
 
 st.set_page_config(page_title="Rainbow ERP - SaaS Edition", layout="wide")
 
-# --- 1. BULLETPROOF DATABASE FUNCTIONS (Open-Query-Close) ---
+# ==========================================
+# 1. BULLETPROOF DATABASE FUNCTIONS
+# ==========================================
 def get_connection():
-    """Naya connection banata hai jab bhi zaroorat ho"""
+    """Naya connection banata hai jab bhi zaroorat ho (Crash-Proof)"""
     return mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
         port=st.secrets["mysql"]["port"],
         user=st.secrets["mysql"]["user"],
         password=st.secrets["mysql"]["password"],
         database=st.secrets["mysql"]["database"],
-        connect_timeout=10
+        connect_timeout=10,
+        use_pure=True  # <-- SEGMENTATION FAULT FIX (The Master Key)
     )
 
 def init_db():
@@ -45,6 +48,7 @@ def init_db():
                     amount VARCHAR(50)
                 )
             """)
+            # Default Master Boss
             cursor.execute("SELECT COUNT(*) FROM users")
             if cursor.fetchone()[0] == 0:
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", 
@@ -55,7 +59,7 @@ def init_db():
         except Exception as e:
             st.error(f"DB Init Error: {e}")
 
-# Run database setup
+# Database tables setup run karega
 init_db()
 
 def fetch_data(query, params=None):
@@ -72,7 +76,7 @@ def fetch_data(query, params=None):
         return []
 
 def execute_data(query, params):
-    """Database mein data save/delete karne ke liye"""
+    """Database mein data save karne ke liye"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -86,7 +90,9 @@ def execute_data(query, params):
         st.error(f"Execution Error: {e}")
         return False
 
-# --- 2. COOKIE MANAGER (With Safety Net for KeyError) ---
+# ==========================================
+# 2. COOKIE & SESSION MANAGER
+# ==========================================
 cookie_manager = stx.CookieManager()
 time.sleep(0.2)
 
@@ -101,7 +107,6 @@ try:
     user_name = cookie_manager.get(cookie="rainbow_user_name")
 except Exception: pass
 
-# --- Smart Session State Sync ---
 if auth_status == "verified":
     st.session_state.auth_logged_in = True
     if user_role and "auth_role" not in st.session_state:
@@ -120,7 +125,9 @@ is_verified = st.session_state.get("auth_logged_in", False)
 current_role = st.session_state.get("auth_role", None)
 current_name = st.session_state.get("auth_name", None)
 
-# --- 3. LOGIN SCREEN ---
+# ==========================================
+# 3. LOGIN SCREEN
+# ==========================================
 if not is_verified:
     st.title("☁️ SaaS ERP Platform")
     _, login_col, _ = st.columns([1, 2, 1])
@@ -148,7 +155,9 @@ if not is_verified:
             else:
                 st.error("❌ Invalid Credentials!")
 
-# --- 4. LOGGED IN SYSTEM ---
+# ==========================================
+# 4. LOGGED IN SYSTEM (DASHBOARD)
+# ==========================================
 else:
     if not current_role:
         st.info("🔄 Syncing Session Module...")
@@ -175,11 +184,11 @@ else:
             time.sleep(0.5)
             st.rerun()
 
-        # ==========================================
-        # SUPER ADMIN PANEL
-        # ==========================================
+        # ----------------------------------------
+        # A. SUPER ADMIN PANEL
+        # ----------------------------------------
         if safe_role == "SUPERADMIN":
-            st.title("👑 Super Admin Dashboard (MySQL Connected)")
+            st.title("👑 Super Admin Dashboard (MySQL Live)")
             
             all_users = fetch_data("SELECT * FROM users")
             total_clients = sum(1 for u in all_users if u['role'] == 'customer')
@@ -228,9 +237,9 @@ else:
             else:
                 st.dataframe(pd.DataFrame(all_challans), use_container_width=True)
 
-        # ==========================================
-        # CUSTOMER ERP
-        # ==========================================
+        # ----------------------------------------
+        # B. CUSTOMER / CLIENT ERP PANEL
+        # ----------------------------------------
         elif safe_role == "CUSTOMER":
             selected_module = st.sidebar.radio("Menu", ["📝 Make New Challan", "📜 Challan History", "⚙️ Company Profile"])
             
@@ -253,7 +262,7 @@ else:
                     st.success("✅ Profile Updated Successfully!")
 
             elif selected_module == "📜 Challan History":
-                st.title("📜 MySQL Challan History Register")
+                st.title("📜 My Challan History Register")
                 user_challans = fetch_data("SELECT challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
                 
                 if not user_challans:
@@ -325,7 +334,6 @@ else:
                     total_amount = total_amount_before_tax + total_tax
                     amt_str = f"₹{total_amount:.2f}"
                     
-                    # NAYA SAFER DB INSERT METHOD
                     saved = execute_data("""
                         INSERT INTO challans (created_by, challan_date, challan_no, party_name, amount) 
                         VALUES (%s, %s, %s, %s, %s)
