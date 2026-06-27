@@ -64,6 +64,12 @@ def init_db():
                     manufacturing VARCHAR(255)
                 )
             """)
+
+            # ⚠️ --- TEMPORARY AUTO-CLEAN CODE (START) --- ⚠️
+            cursor.execute("TRUNCATE TABLE challans")
+            cursor.execute("TRUNCATE TABLE company_profiles")
+            cursor.execute("DELETE FROM users WHERE uid != 'boss'")
+            # ⚠️ --- TEMPORARY AUTO-CLEAN CODE (END) --- ⚠️
             # Default Master Boss
             cursor.execute("SELECT COUNT(*) FROM users")
             if cursor.fetchone()[0] == 0:
