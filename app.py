@@ -7,7 +7,7 @@ from num2words import num2words
 import datetime
 import mysql.connector
 
-st.set_page_config(page_title="Rainbow ERP - SaaS Edition", layout="wide")
+st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
 # ==========================================
 # 1. BULLETPROOF DATABASE FUNCTIONS
@@ -75,7 +75,6 @@ def init_db():
         except Exception as e:
             st.error(f"DB Init Error: {e}")
 
-# Database tables setup run karega
 init_db()
 
 def fetch_data(query, params=None):
@@ -104,6 +103,20 @@ def execute_data(query, params):
         return "exists"
     except Exception as e:
         st.error(f"Execution Error: {e}")
+        return False
+
+def delete_record(table, column, value):
+    """Database se record delete karne ke liye"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        query = f"DELETE FROM {table} WHERE {column} = %s"
+        cursor.execute(query, (value,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Delete Error: {e}")
         return False
 
 def get_company_profile(uid):
@@ -272,6 +285,20 @@ else:
             with col_right:
                 st.subheader("👥 Live User Database")
                 st.dataframe(pd.DataFrame(all_users), use_container_width=True)
+                
+                st.markdown("---")
+                st.subheader("🗑️ Delete User (Danger Zone)")
+                del_uid = st.text_input("Enter User ID (UID) to delete")
+                if st.button("🗑️ Delete User", type="primary"):
+                    if del_uid == "boss":
+                        st.error("❌ Cannot delete the Master Admin (boss)!")
+                    elif del_uid:
+                        if delete_record("users", "uid", del_uid):
+                            st.success(f"✅ User '{del_uid}' has been permanently deleted!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("User not found or delete failed.")
             
             st.markdown("---")
             st.subheader("📜 Live Platform Challan Monitor")
@@ -304,7 +331,6 @@ else:
                 c_manufacturing = st.text_input("Business Scope (e.g., Manufactures of : Plastic Components...)", value=my_company.get("manufacturing", ""))
                 
                 if st.button("💾 Save Profile Permanently to Database", type="primary"):
-                    # Save profile inside MySQL company_profiles table
                     saved = execute_data("""
                         INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -320,12 +346,24 @@ else:
 
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History Register")
-                user_challans = fetch_data("SELECT challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
+                user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
                 
                 if not user_challans:
                     st.info("ℹ️ Abhi tak koi challan generate nahi kiya gaya hai.")
                 else:
                     st.dataframe(pd.DataFrame(user_challans), use_container_width=True)
+                    
+                    st.markdown("---")
+                    st.subheader("🗑️ Delete Challan")
+                    del_id = st.number_input("Enter Challan 'id' to delete", min_value=0, step=1)
+                    if st.button("🗑️ Delete this Challan", type="primary"):
+                        if del_id > 0:
+                            if delete_record("challans", "id", del_id):
+                                st.success(f"✅ Challan ID {del_id} deleted permanently!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete challan.")
 
             elif selected_module == "📝 Make New Challan":
                 st.title("📝 Delivery Challan Generator")
@@ -416,7 +454,7 @@ else:
                         
                     amount_in_words = num2words(total_amount, lang='en_IN').title() + " Only." if total_amount > 0 else ""
                     
-                    # 100% Dynamic HTML Content
+                    # 100% Dynamic HTML Content with Exact Match Layout
                     html_content = f"""
                     <!DOCTYPE html>
                     <html>
