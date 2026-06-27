@@ -11,9 +11,10 @@ import json
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
 # ==========================================
-# 1. BULLETPROOF DATABASE FUNCTIONS
+# 1. TURBO-CACHED DATABASE FUNCTIONS
 # ==========================================
-def get_connection():
+@st.cache_resource(ttl=600)  # Connection ko 10 minute tak memory mein hold rakhega (Super Fast)
+def get_cached_connection():
     return mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
         port=st.secrets["mysql"]["port"],
@@ -27,13 +28,13 @@ def get_connection():
 def init_db():
     if "db_initialized" not in st.session_state:
         try:
-            conn = get_connection()
+            conn = get_cached_connection()
+            conn.ping(reconnect=True, attempts=3, delay=1)
             cursor = conn.cursor()
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
             
-            # Smart Table Upgrade: Drop old basic table and create Pro table if items_data is missing
-            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT)") # Dummy execution to ensure it exists
+            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT)") 
             cursor.execute("SHOW COLUMNS FROM challans LIKE 'items_data'")
             if not cursor.fetchone():
                 cursor.execute("DROP TABLE IF EXISTS challans")
@@ -61,7 +62,7 @@ def init_db():
             if cursor.fetchone()[0] == 0:
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "Keshav (Master)"))
             conn.commit()
-            conn.close()
+            cursor.close()
             st.session_state.db_initialized = True
         except Exception as e:
             st.error(f"DB Init Error: {e}")
@@ -70,33 +71,36 @@ init_db()
 
 def fetch_data(query, params=None):
     try:
-        conn = get_connection()
+        conn = get_cached_connection()
+        conn.ping(reconnect=True, attempts=3, delay=1) # Soya hua connection jaga dega, connection close nahi karega
         cursor = conn.cursor(dictionary=True)
         cursor.execute(query, params or ())
         data = cursor.fetchall()
-        conn.close()
+        cursor.close()
         return data
     except Exception as e:
         return []
 
 def execute_data(query, params):
     try:
-        conn = get_connection()
+        conn = get_cached_connection()
+        conn.ping(reconnect=True, attempts=3, delay=1)
         cursor = conn.cursor()
         cursor.execute(query, params)
         conn.commit()
-        conn.close()
+        cursor.close()
         return True
     except Exception as e:
         return False
 
 def delete_record(table, column, value):
     try:
-        conn = get_connection()
+        conn = get_cached_connection()
+        conn.ping(reconnect=True, attempts=3, delay=1)
         cursor = conn.cursor()
         cursor.execute(f"DELETE FROM {table} WHERE {column} = %s", (value,))
         conn.commit()
-        conn.close()
+        cursor.close()
         return True
     except:
         return False
@@ -116,7 +120,7 @@ def parse_date(date_str):
 # 2. COOKIE & SESSION MANAGER
 # ==========================================
 cookie_manager = stx.CookieManager()
-time.sleep(0.2)
+time.sleep(0.1) # Reduced cookie delay to minimum safe limit
 
 try: auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
 except: auth_status = None
@@ -159,7 +163,7 @@ if not is_verified:
                 cookie_manager.set("rainbow_user_role", user_data[0]["role"], max_age=2592000)
                 cookie_manager.set("rainbow_user_name", user_data[0]["name"], max_age=2592000)
                 cookie_manager.set("rainbow_user_uid", user_data[0]["uid"], max_age=2592000)
-                st.rerun()
+                st.rerun() # Removed time.sleep for instant login
             else:
                 st.error("❌ Invalid Credentials!")
 
@@ -168,10 +172,8 @@ if not is_verified:
 # ==========================================
 else:
     if not current_role or not current_uid:
-        st.warning("⚠️ System Update: Old session found. Resetting... Please wait.")
         cookie_manager.delete("rainbow_erp_auth")
         if "auth_logged_in" in st.session_state: del st.session_state.auth_logged_in
-        time.sleep(1.5)
         st.rerun()
     else:
         safe_name = current_name if current_name else "User"
@@ -188,7 +190,11 @@ else:
             cookie_manager.delete("rainbow_erp_auth"); cookie_manager.delete("rainbow_user_role"); cookie_manager.delete("rainbow_user_name"); cookie_manager.delete("rainbow_user_uid")
             st.rerun()
 
-        my_company = get_company_profile(current_uid)
+        # Cache company profile in session state to avoid DB hit on every render
+        if 'my_company' not in st.session_state or st.session_state.get('company_uid') != current_uid:
+            st.session_state.my_company = get_company_profile(current_uid)
+            st.session_state.company_uid = current_uid
+        my_company = st.session_state.my_company
 
         # ----------------------------------------
         # A. SUPER ADMIN PANEL
@@ -217,7 +223,8 @@ else:
                     new_role_select = st.selectbox("Role", ["customer", "superadmin"])
                     if st.form_submit_button("🚀 Create Account Live"):
                         if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
-                            st.success("Account Created!"); time.sleep(1); st.rerun()
+                            st.success("Account Created!")
+                            st.rerun() # Instant reload
 
             with col_right:
                 st.subheader("👥 Live User Database")
@@ -226,7 +233,9 @@ else:
                 del_uid = st.text_input("Enter UID to delete")
                 if st.button("🗑️ Delete User"):
                     if del_uid == "boss": st.error("Cannot delete Master Admin!")
-                    elif delete_record("users", "uid", del_uid): st.success("User deleted!"); time.sleep(1); st.rerun()
+                    elif delete_record("users", "uid", del_uid): 
+                        st.success("User deleted!")
+                        st.rerun()
             
             st.markdown("---")
             st.subheader("📜 Live Platform Challan Monitor")
@@ -258,7 +267,10 @@ else:
                         ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s
                     """, (current_uid, c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing,
                           c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing))
-                    st.success("Profile Updated!"); time.sleep(1); st.rerun()
+                    
+                    st.session_state.my_company = get_company_profile(current_uid) # Update cached session
+                    st.success("Profile Updated!")
+                    st.rerun()
 
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History")
@@ -268,14 +280,14 @@ else:
                     st.markdown("---")
                     del_id = st.number_input("Enter Challan 'id' to delete", min_value=0, step=1)
                     if st.button("🗑️ Delete this Challan", type="primary") and del_id > 0:
-                        if delete_record("challans", "id", del_id): st.success(f"Challan {del_id} deleted!"); time.sleep(1); st.rerun()
+                        if delete_record("challans", "id", del_id): 
+                            st.success(f"Challan {del_id} deleted!")
+                            st.rerun()
                 else: st.info("No challans found.")
 
             elif selected_module == "📝 Make / Edit Challan":
                 st.title("📝 Delivery Challan Engine")
                 
-                # --- SEARCH & EDIT MODULE ---
-                st.info("Naya challan banane ke liye form bharein. Ya purana Challan Edit/Reprint karne ke liye search karein:")
                 sc1, sc2, sc3 = st.columns([2, 2, 1])
                 with sc1: search_no = st.text_input("Search Challan No.")
                 with sc2: search_date = st.date_input("Search Challan Date")
@@ -296,7 +308,6 @@ else:
                         else:
                             st.error("❌ Challan not found!")
 
-                # --- UNIFIED FORM ---
                 if st.button("🔄 Clear Form (Make New Challan)"):
                     for key in ["form_data", "form_items", "mode"]:
                         if key in st.session_state: del st.session_state[key]
@@ -340,10 +351,9 @@ else:
 
                 items_data = []
                 for i in range(st.session_state.item_count):
-                    st.markdown(f"**Item {i+1}**")
                     existing_item = fi[i] if i < len(fi) else {}
                     c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                    with c1: desc = st.text_area("Description", value=existing_item.get('desc', ''), key=f"desc_{i}", height=68)
+                    with c1: desc = st.text_input("Description", value=existing_item.get('desc', ''), key=f"desc_{i}") # Switched to fast text_input
                     with c2: hsn = st.text_input("HSN", value=existing_item.get('hsn', ''), key=f"hsn_{i}")
                     with c3: boxes = st.text_input("Boxes", value=existing_item.get('boxes', ''), key=f"box_{i}")
                     with c4: qty = st.number_input("Qty", value=float(existing_item.get('qty', 0)), min_value=0.0, step=1.0, key=f"qty_{i}")
@@ -363,7 +373,6 @@ else:
                     amt_str = f"₹{total_amount:.2f}"
                     items_json = json.dumps(items_data)
 
-                    # CRUD: INSERT OR UPDATE LOGIC
                     saved = False
                     if mode == "INSERT":
                         saved = execute_data("""
@@ -376,10 +385,9 @@ else:
                             WHERE id=%s
                         """, (challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply.strftime('%d/%m/%Y'), transport_mode, place_of_supply, items_json, amt_str, fd['id']))
 
-                    if saved: st.success(f"✅ Challan {mode}D Successfully in Database!")
-                    else: st.error("⚠️ Failed to save in DB, generating PDF anyway...")
+                    if saved: st.success(f"✅ Challan {mode}D Successfully!")
+                    else: st.error("⚠️ Database Error!")
                     
-                    # HTML Generation
                     items_html = ""
                     for idx, item in enumerate(items_data):
                         qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
