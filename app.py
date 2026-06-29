@@ -7,14 +7,15 @@ from num2words import num2words
 import datetime
 import mysql.connector
 import json
+import uuid
 
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
 # ==========================================
-# 1. TURBO-CACHED DATABASE FUNCTIONS
+# 1. BULLETPROOF DATABASE FUNCTIONS
 # ==========================================
-@st.cache_resource(ttl=600)  # Connection ko 10 minute tak memory mein hold rakhega (Super Fast)
-def get_cached_connection():
+@st.cache_resource(ttl=600)
+def get_connection():
     return mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
         port=st.secrets["mysql"]["port"],
@@ -28,9 +29,10 @@ def get_cached_connection():
 def init_db():
     if "db_initialized" not in st.session_state:
         try:
-            conn = get_cached_connection()
-            conn.ping(reconnect=True, attempts=3, delay=1)
+            conn = get_connection()
+            conn.ping(reconnect=True)
             cursor = conn.cursor()
+            
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
             
@@ -61,6 +63,7 @@ def init_db():
             cursor.execute("SELECT COUNT(*) FROM users")
             if cursor.fetchone()[0] == 0:
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "Keshav (Master)"))
+            
             conn.commit()
             cursor.close()
             st.session_state.db_initialized = True
@@ -71,8 +74,8 @@ init_db()
 
 def fetch_data(query, params=None):
     try:
-        conn = get_cached_connection()
-        conn.ping(reconnect=True, attempts=3, delay=1) # Soya hua connection jaga dega, connection close nahi karega
+        conn = get_connection()
+        conn.ping(reconnect=True)
         cursor = conn.cursor(dictionary=True)
         cursor.execute(query, params or ())
         data = cursor.fetchall()
@@ -83,8 +86,8 @@ def fetch_data(query, params=None):
 
 def execute_data(query, params):
     try:
-        conn = get_cached_connection()
-        conn.ping(reconnect=True, attempts=3, delay=1)
+        conn = get_connection()
+        conn.ping(reconnect=True)
         cursor = conn.cursor()
         cursor.execute(query, params)
         conn.commit()
@@ -95,8 +98,8 @@ def execute_data(query, params):
 
 def delete_record(table, column, value):
     try:
-        conn = get_cached_connection()
-        conn.ping(reconnect=True, attempts=3, delay=1)
+        conn = get_connection()
+        conn.ping(reconnect=True)
         cursor = conn.cursor()
         cursor.execute(f"DELETE FROM {table} WHERE {column} = %s", (value,))
         conn.commit()
@@ -117,25 +120,23 @@ def parse_date(date_str):
     return datetime.date.today()
 
 # ==========================================
-# 2. COOKIE & SESSION MANAGER
+# 2. SESSION & AUTH MANAGER
 # ==========================================
-cookie_manager = stx.CookieManager()
-time.sleep(0.1) # Reduced cookie delay to minimum safe limit
+cookie_manager = stx.CookieManager(key="cookie_manager")
+time.sleep(0.1)
 
-try: auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
-except: auth_status = None
-try: user_role = cookie_manager.get(cookie="rainbow_user_role")
-except: user_role = None
-try: user_name = cookie_manager.get(cookie="rainbow_user_name")
-except: user_name = None
-try: user_uid = cookie_manager.get(cookie="rainbow_user_uid")
-except: user_uid = None
-
-if auth_status == "verified":
-    st.session_state.auth_logged_in = True
-    if user_role: st.session_state.auth_role = user_role
-    if user_name: st.session_state.auth_name = user_name
-    if user_uid: st.session_state.auth_uid = user_uid
+if "auth_logged_in" not in st.session_state:
+    try: 
+        auth = cookie_manager.get(cookie="rainbow_erp_auth")
+        if auth == "verified":
+            st.session_state.auth_logged_in = True
+            st.session_state.auth_role = cookie_manager.get(cookie="rainbow_user_role")
+            st.session_state.auth_name = cookie_manager.get(cookie="rainbow_user_name")
+            st.session_state.auth_uid = cookie_manager.get(cookie="rainbow_user_uid")
+        else:
+            st.session_state.auth_logged_in = False
+    except:
+        st.session_state.auth_logged_in = False
 
 is_verified = st.session_state.get("auth_logged_in", False)
 current_role = st.session_state.get("auth_role", None)
@@ -150,20 +151,22 @@ if not is_verified:
     _, login_col, _ = st.columns([1, 2, 1])
     with login_col:
         st.subheader("Login to your Account")
-        userid = st.text_input("User ID")
-        password = st.text_input("Password", type="password")
-        if st.button("Secure Login", type="primary", use_container_width=True):
+        userid = st.text_input("User ID", key="login_id")
+        password = st.text_input("Password", type="password", key="login_pwd")
+        if st.button("Secure Login", key="login_btn"):
             user_data = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (userid, password))
             if user_data:
                 st.session_state.auth_logged_in = True
                 st.session_state.auth_role = user_data[0]["role"]
                 st.session_state.auth_name = user_data[0]["name"]
                 st.session_state.auth_uid = user_data[0]["uid"]
-                cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000)
-                cookie_manager.set("rainbow_user_role", user_data[0]["role"], max_age=2592000)
-                cookie_manager.set("rainbow_user_name", user_data[0]["name"], max_age=2592000)
-                cookie_manager.set("rainbow_user_uid", user_data[0]["uid"], max_age=2592000)
-                st.rerun() # Removed time.sleep for instant login
+                # Save to cookies with unique keys to avoid duplicate element warning
+                cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key=f"set_auth_{userid}")
+                cookie_manager.set("rainbow_user_role", user_data[0]["role"], max_age=2592000, key=f"set_role_{userid}")
+                cookie_manager.set("rainbow_user_name", user_data[0]["name"], max_age=2592000, key=f"set_name_{userid}")
+                cookie_manager.set("rainbow_user_uid", user_data[0]["uid"], max_age=2592000, key=f"set_uid_{userid}")
+                time.sleep(0.5)
+                st.rerun()
             else:
                 st.error("❌ Invalid Credentials!")
 
@@ -172,8 +175,7 @@ if not is_verified:
 # ==========================================
 else:
     if not current_role or not current_uid:
-        cookie_manager.delete("rainbow_erp_auth")
-        if "auth_logged_in" in st.session_state: del st.session_state.auth_logged_in
+        st.session_state.auth_logged_in = False
         st.rerun()
     else:
         safe_name = current_name if current_name else "User"
@@ -184,17 +186,19 @@ else:
         st.sidebar.markdown(f"**Role:** {safe_role}")
         st.sidebar.markdown("---")
         
-        if st.sidebar.button("🔒 Logout"):
+        if st.sidebar.button("🔒 Logout", key="logout_sidebar"):
             for key in ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode"]:
                 if key in st.session_state: del st.session_state[key]
-            cookie_manager.delete("rainbow_erp_auth"); cookie_manager.delete("rainbow_user_role"); cookie_manager.delete("rainbow_user_name"); cookie_manager.delete("rainbow_user_uid")
+            try:
+                cookie_manager.delete("rainbow_erp_auth", key="del_a")
+                cookie_manager.delete("rainbow_user_role", key="del_r")
+                cookie_manager.delete("rainbow_user_name", key="del_n")
+                cookie_manager.delete("rainbow_user_uid", key="del_u")
+            except: pass
+            time.sleep(0.5)
             st.rerun()
 
-        # Cache company profile in session state to avoid DB hit on every render
-        if 'my_company' not in st.session_state or st.session_state.get('company_uid') != current_uid:
-            st.session_state.my_company = get_company_profile(current_uid)
-            st.session_state.company_uid = current_uid
-        my_company = st.session_state.my_company
+        my_company = get_company_profile(current_uid)
 
         # ----------------------------------------
         # A. SUPER ADMIN PANEL
@@ -223,77 +227,72 @@ else:
                     new_role_select = st.selectbox("Role", ["customer", "superadmin"])
                     if st.form_submit_button("🚀 Create Account Live"):
                         if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
-                            st.success("Account Created!")
-                            st.rerun() # Instant reload
+                            st.success("Account Created!"); time.sleep(0.5); st.rerun()
 
             with col_right:
                 st.subheader("👥 Live User Database")
-                st.dataframe(pd.DataFrame(all_users), use_container_width=True)
+                st.dataframe(pd.DataFrame(all_users))
                 st.markdown("---")
-                del_uid = st.text_input("Enter UID to delete")
-                if st.button("🗑️ Delete User"):
+                del_uid = st.text_input("Enter UID to delete", key="admin_del_uid")
+                if st.button("🗑️ Delete User", key="admin_del_btn"):
                     if del_uid == "boss": st.error("Cannot delete Master Admin!")
                     elif delete_record("users", "uid", del_uid): 
-                        st.success("User deleted!")
-                        st.rerun()
+                        st.success("User deleted!"); time.sleep(0.5); st.rerun()
             
             st.markdown("---")
             st.subheader("📜 Live Platform Challan Monitor")
             all_challans = fetch_data("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans ORDER BY id DESC")
-            st.dataframe(pd.DataFrame(all_challans), use_container_width=True) if all_challans else st.info("No challans yet.")
+            if all_challans: st.dataframe(pd.DataFrame(all_challans))
+            else: st.info("No challans yet.")
 
         # ----------------------------------------
         # B. CUSTOMER / CLIENT ERP PANEL
         # ----------------------------------------
         elif safe_role == "CUSTOMER":
-            selected_module = st.sidebar.radio("Menu", ["📝 Make / Edit Challan", "📜 Challan History", "⚙️ Company Profile"])
+            selected_module = st.sidebar.radio("Menu", ["📝 Make / Edit Challan", "📜 Challan History", "⚙️ Company Profile"], key="cust_menu")
             
             if selected_module == "⚙️ Company Profile":
                 st.title("⚙️ Dynamic Company Profile")
-                c_name = st.text_input("Company/Factory Name", value=my_company["name"])
-                c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""))
-                c_gst = st.text_input("GSTIN Number", value=my_company["gstin"])
-                c_address = st.text_area("Registered Address", value=my_company["address"])
+                c_name = st.text_input("Company/Factory Name", value=my_company["name"], key="c_name")
+                c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
+                c_gst = st.text_input("GSTIN Number", value=my_company["gstin"], key="c_gst")
+                c_address = st.text_area("Registered Address", value=my_company["address"], key="c_address")
                 col_s1, col_s2 = st.columns(2)
-                with col_s1: c_state = st.text_input("State", value=my_company["state"])
-                with col_s2: c_state_code = st.text_input("State Code", value=my_company["state_code"])
-                c_contact = st.text_input("Contact Lines", value=my_company.get("contact", ""))
-                c_manufacturing = st.text_input("Business Scope", value=my_company.get("manufacturing", ""))
+                with col_s1: c_state = st.text_input("State", value=my_company["state"], key="c_state")
+                with col_s2: c_state_code = st.text_input("State Code", value=my_company["state_code"], key="c_scode")
+                c_contact = st.text_input("Contact Lines", value=my_company.get("contact", ""), key="c_contact")
+                c_manufacturing = st.text_input("Business Scope", value=my_company.get("manufacturing", ""), key="c_manu")
                 
-                if st.button("💾 Save Profile", type="primary"):
+                if st.button("💾 Save Profile", type="primary", key="save_profile"):
                     execute_data("""
                         INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s
                     """, (current_uid, c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing,
                           c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing))
-                    
-                    st.session_state.my_company = get_company_profile(current_uid) # Update cached session
-                    st.success("Profile Updated!")
-                    st.rerun()
+                    st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
 
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History")
                 user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
                 if user_challans:
-                    st.dataframe(pd.DataFrame(user_challans), use_container_width=True)
+                    st.dataframe(pd.DataFrame(user_challans))
                     st.markdown("---")
-                    del_id = st.number_input("Enter Challan 'id' to delete", min_value=0, step=1)
-                    if st.button("🗑️ Delete this Challan", type="primary") and del_id > 0:
+                    del_id = st.number_input("Enter Challan 'id' to delete", min_value=0, step=1, key="del_cid")
+                    if st.button("🗑️ Delete this Challan", type="primary", key="del_cbtn") and del_id > 0:
                         if delete_record("challans", "id", del_id): 
-                            st.success(f"Challan {del_id} deleted!")
-                            st.rerun()
+                            st.success(f"Challan {del_id} deleted!"); time.sleep(0.5); st.rerun()
                 else: st.info("No challans found.")
 
             elif selected_module == "📝 Make / Edit Challan":
                 st.title("📝 Delivery Challan Engine")
                 
                 sc1, sc2, sc3 = st.columns([2, 2, 1])
-                with sc1: search_no = st.text_input("Search Challan No.")
-                with sc2: search_date = st.date_input("Search Challan Date")
+                with sc1: search_no = st.text_input("Search Challan No.", key="s_no")
+                with sc2: search_date = st.date_input("Search Challan Date", key="s_date")
                 with sc3:
                     st.write("")
-                    if st.button("🔍 Search & Edit"):
+                    if st.button("🔍 Search & Edit", key="s_btn"):
                         data = fetch_data("SELECT * FROM challans WHERE challan_no = %s AND challan_date = %s AND created_by = %s", (search_no, search_date.strftime('%d/%m/%Y'), safe_name))
                         if data:
                             st.session_state.form_data = data[0]
@@ -308,7 +307,7 @@ else:
                         else:
                             st.error("❌ Challan not found!")
 
-                if st.button("🔄 Clear Form (Make New Challan)"):
+                if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
                     for key in ["form_data", "form_items", "mode"]:
                         if key in st.session_state: del st.session_state[key]
                     st.session_state.item_count = 1
@@ -321,39 +320,40 @@ else:
                 if 'item_count' not in st.session_state: st.session_state.item_count = 1
 
                 st.markdown("---")
-                if mode == "UPDATE": st.warning(f"⚠️ You are EDITING an existing challan (ID: {fd['id']}).")
+                if mode == "UPDATE": st.warning(f"⚠️ You are EDITING an existing challan (ID: {fd.get('id', '')}).")
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    party_name = st.text_input("Dispatch To (Party Name)", value=fd.get('party_name', ''))
-                    party_address = st.text_area("Party Address", value=fd.get('party_address', ''))
-                    party_gstin = st.text_input("Party GSTIN", value=fd.get('party_gstin', ''))
+                    party_name = st.text_input("Dispatch To (Party Name)", value=fd.get('party_name', ''), key="p_name")
+                    party_address = st.text_area("Party Address", value=fd.get('party_address', ''), key="p_add")
+                    party_gstin = st.text_input("Party GSTIN", value=fd.get('party_gstin', ''), key="p_gst")
                     col_p1, col_p2 = st.columns(2)
-                    with col_p1: party_state = st.text_input("Party State", value=fd.get('party_state', ''))
-                    with col_p2: party_state_code = st.text_input("Party State Code", value=fd.get('party_state_code', ''))
+                    with col_p1: party_state = st.text_input("Party State", value=fd.get('party_state', ''), key="p_state")
+                    with col_p2: party_state_code = st.text_input("Party State Code", value=fd.get('party_state_code', ''), key="p_scode")
                     
                 with col2:
-                    challan_no = st.text_input("Challan No.", value=fd.get('challan_no', ''))
-                    vehicle_no = st.text_input("Vehicle No.", value=fd.get('vehicle_no', ''))
-                    date_of_supply = st.date_input("Date of Supply", parse_date(fd.get('date_of_supply')))
-                    challan_date = st.date_input("Challan Date", parse_date(fd.get('challan_date')))
-                    transport_mode = st.text_input("Transport Mode", value=fd.get('transport_mode', 'Road'))
-                    place_of_supply = st.text_input("Place of Supply", value=fd.get('place_of_supply', ''))
+                    challan_no = st.text_input("Challan No.", value=fd.get('challan_no', ''), key="c_no")
+                    vehicle_no = st.text_input("Vehicle No.", value=fd.get('vehicle_no', ''), key="v_no")
+                    date_of_supply = st.date_input("Date of Supply", parse_date(fd.get('date_of_supply')), key="d_sup")
+                    challan_date = st.date_input("Challan Date", parse_date(fd.get('challan_date')), key="c_date")
+                    transport_mode = st.text_input("Transport Mode", value=fd.get('transport_mode', 'Road'), key="t_mode")
+                    place_of_supply = st.text_input("Place of Supply", value=fd.get('place_of_supply', ''), key="p_sup")
 
                 st.markdown("---")
                 st.subheader("Item Details")
 
                 col_btn1, col_btn2, _ = st.columns([2, 2, 8])
                 with col_btn1:
-                    if st.button("➕ Add Another Item"): st.session_state.item_count += 1; st.rerun()
+                    if st.button("➕ Add Another Item", key="add_item"): st.session_state.item_count += 1; st.rerun()
                 with col_btn2:
-                    if st.button("➖ Remove Last Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
+                    if st.button("➖ Remove Last Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
                 items_data = []
                 for i in range(st.session_state.item_count):
+                    st.markdown(f"**Item {i+1}**")
                     existing_item = fi[i] if i < len(fi) else {}
                     c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                    with c1: desc = st.text_input("Description", value=existing_item.get('desc', ''), key=f"desc_{i}") # Switched to fast text_input
+                    with c1: desc = st.text_area("Description", value=existing_item.get('desc', ''), key=f"desc_{i}", height=68)
                     with c2: hsn = st.text_input("HSN", value=existing_item.get('hsn', ''), key=f"hsn_{i}")
                     with c3: boxes = st.text_input("Boxes", value=existing_item.get('boxes', ''), key=f"box_{i}")
                     with c4: qty = st.number_input("Qty", value=float(existing_item.get('qty', 0)), min_value=0.0, step=1.0, key=f"qty_{i}")
@@ -364,7 +364,7 @@ else:
                 st.markdown("---")
                 btn_txt = "🔄 Update Existing Challan & Print" if mode == "UPDATE" else "🚀 Save New Challan & Print"
                 
-                if st.button(btn_txt, type="primary", use_container_width=True):
+                if st.button(btn_txt, type="primary", key="save_print_btn"):
                     total_amount_before_tax = sum(item['amount'] for item in items_data)
                     cgst = total_amount_before_tax * 0.09
                     sgst = total_amount_before_tax * 0.09
@@ -385,8 +385,8 @@ else:
                             WHERE id=%s
                         """, (challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply.strftime('%d/%m/%Y'), transport_mode, place_of_supply, items_json, amt_str, fd['id']))
 
-                    if saved: st.success(f"✅ Challan {mode}D Successfully!")
-                    else: st.error("⚠️ Database Error!")
+                    if saved: st.success(f"✅ Challan {mode}D Successfully in Database!")
+                    else: st.error("⚠️ Failed to save in DB, generating PDF anyway...")
                     
                     items_html = ""
                     for idx, item in enumerate(items_data):
@@ -511,8 +511,8 @@ else:
                     </html>
                     """
                     
-                    pdf_path = f"Challan_{challan_no if challan_no else 'New'}.pdf"
-                    HTML(string=html_content).write_pdf(pdf_path)
+                    pdf_filename = f"Challan_{challan_no if challan_no else 'New'}.pdf"
+                    HTML(string=html_content).write_pdf(pdf_filename)
                     
-                    with open(pdf_path, "rb") as pdf_file:
-                        st.download_button(label="📄 Download PDF", data=pdf_file, file_name=pdf_path, mime="application/pdf")
+                    with open(pdf_filename, "rb") as pdf_file:
+                        st.download_button(label="📄 Download Ready PDF", data=pdf_file, file_name=pdf_filename, mime="application/pdf", key=f"dl_pdf_{uuid.uuid4()}")
