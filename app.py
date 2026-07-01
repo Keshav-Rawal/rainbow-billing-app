@@ -12,9 +12,8 @@ import uuid
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
 # ==========================================
-# 1. BULLETPROOF DATABASE FUNCTIONS
+# 1. SAFE DATABASE FUNCTIONS (No Caching)
 # ==========================================
-@st.cache_resource(ttl=600)
 def get_connection():
     return mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
@@ -30,7 +29,6 @@ def init_db():
     if "db_initialized" not in st.session_state:
         try:
             conn = get_connection()
-            conn.ping(reconnect=True)
             cursor = conn.cursor()
             
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
@@ -56,9 +54,14 @@ def init_db():
                         transport_mode VARCHAR(50),
                         place_of_supply VARCHAR(100),
                         items_data TEXT,
-                        amount VARCHAR(50)
+                        amount VARCHAR(50),
+                        is_deleted INT DEFAULT 0
                     )
                 """)
+            else:
+                # Auto-upgrade existing table to support Recycle Bin
+                try: cursor.execute("ALTER TABLE challans ADD COLUMN is_deleted INT DEFAULT 0")
+                except: pass
                 
             cursor.execute("SELECT COUNT(*) FROM users")
             if cursor.fetchone()[0] == 0:
@@ -66,20 +69,21 @@ def init_db():
             
             conn.commit()
             cursor.close()
+            conn.close()
             st.session_state.db_initialized = True
         except Exception as e:
-            st.error(f"DB Init Error: {e}")
+            pass
 
 init_db()
 
 def fetch_data(query, params=None):
     try:
         conn = get_connection()
-        conn.ping(reconnect=True)
         cursor = conn.cursor(dictionary=True)
         cursor.execute(query, params or ())
         data = cursor.fetchall()
         cursor.close()
+        conn.close()
         return data
     except Exception as e:
         return []
@@ -87,25 +91,13 @@ def fetch_data(query, params=None):
 def execute_data(query, params):
     try:
         conn = get_connection()
-        conn.ping(reconnect=True)
         cursor = conn.cursor()
         cursor.execute(query, params)
         conn.commit()
         cursor.close()
+        conn.close()
         return True
     except Exception as e:
-        return False
-
-def delete_record(table, column, value):
-    try:
-        conn = get_connection()
-        conn.ping(reconnect=True)
-        cursor = conn.cursor()
-        cursor.execute(f"DELETE FROM {table} WHERE {column} = %s", (value,))
-        conn.commit()
-        cursor.close()
-        return True
-    except:
         return False
 
 def get_company_profile(uid):
@@ -160,7 +152,6 @@ if not is_verified:
                 st.session_state.auth_role = user_data[0]["role"]
                 st.session_state.auth_name = user_data[0]["name"]
                 st.session_state.auth_uid = user_data[0]["uid"]
-                # Save to cookies with unique keys to avoid duplicate element warning
                 cookie_manager.set("rainbow_erp_auth", "verified", max_age=2592000, key=f"set_auth_{userid}")
                 cookie_manager.set("rainbow_user_role", user_data[0]["role"], max_age=2592000, key=f"set_role_{userid}")
                 cookie_manager.set("rainbow_user_name", user_data[0]["name"], max_age=2592000, key=f"set_name_{userid}")
@@ -208,13 +199,13 @@ else:
             
             all_users = fetch_data("SELECT * FROM users")
             total_clients = sum(1 for u in all_users if u['role'] == 'customer')
-            challan_count_data = fetch_data("SELECT COUNT(*) as count FROM challans")
+            challan_count_data = fetch_data("SELECT COUNT(*) as count FROM challans WHERE is_deleted = 0")
             total_bills = challan_count_data[0]['count'] if challan_count_data else 0
             
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Clients", str(total_clients))
             m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
-            m3.metric("Platform Bills", str(total_bills))
+            m3.metric("Platform Active Bills", str(total_bills))
             
             st.markdown("---")
             col_left, col_right = st.columns([1, 1])
@@ -231,25 +222,25 @@ else:
 
             with col_right:
                 st.subheader("👥 Live User Database")
-                st.dataframe(pd.DataFrame(all_users))
+                st.dataframe(pd.DataFrame(all_users), width="stretch")
                 st.markdown("---")
-                del_uid = st.text_input("Enter UID to delete", key="admin_del_uid")
-                if st.button("🗑️ Delete User", key="admin_del_btn"):
+                del_uid = st.text_input("Enter UID to delete permanently", key="admin_del_uid")
+                if st.button("🗑️ Hard Delete User", key="admin_del_btn"):
                     if del_uid == "boss": st.error("Cannot delete Master Admin!")
-                    elif delete_record("users", "uid", del_uid): 
-                        st.success("User deleted!"); time.sleep(0.5); st.rerun()
+                    elif execute_data("DELETE FROM users WHERE uid = %s", (del_uid,)): 
+                        st.success("User permanently deleted!"); time.sleep(0.5); st.rerun()
             
             st.markdown("---")
-            st.subheader("📜 Live Platform Challan Monitor")
-            all_challans = fetch_data("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans ORDER BY id DESC")
-            if all_challans: st.dataframe(pd.DataFrame(all_challans))
-            else: st.info("No challans yet.")
+            st.subheader("📜 Live Platform Challan Monitor (Active)")
+            all_challans = fetch_data("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans WHERE is_deleted = 0 ORDER BY id DESC")
+            if all_challans: st.dataframe(pd.DataFrame(all_challans), width="stretch")
+            else: st.info("No active challans yet.")
 
         # ----------------------------------------
         # B. CUSTOMER / CLIENT ERP PANEL
         # ----------------------------------------
         elif safe_role == "CUSTOMER":
-            selected_module = st.sidebar.radio("Menu", ["📝 Make / Edit Challan", "📜 Challan History", "⚙️ Company Profile"], key="cust_menu")
+            selected_module = st.sidebar.radio("Menu", ["📝 Make / Edit Challan", "📜 Challan History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
             
             if selected_module == "⚙️ Company Profile":
                 st.title("⚙️ Dynamic Company Profile")
@@ -274,15 +265,30 @@ else:
 
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History")
-                user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s ORDER BY id DESC", (safe_name,))
+                user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 if user_challans:
-                    st.dataframe(pd.DataFrame(user_challans))
+                    st.dataframe(pd.DataFrame(user_challans), width="stretch")
                     st.markdown("---")
-                    del_id = st.number_input("Enter Challan 'id' to delete", min_value=0, step=1, key="del_cid")
-                    if st.button("🗑️ Delete this Challan", type="primary", key="del_cbtn") and del_id > 0:
-                        if delete_record("challans", "id", del_id): 
-                            st.success(f"Challan {del_id} deleted!"); time.sleep(0.5); st.rerun()
-                else: st.info("No challans found.")
+                    del_id = st.number_input("Enter Challan 'id' to delete (Move to Trash)", min_value=0, step=1, key="del_cid")
+                    if st.button("🗑️ Move to Recycle Bin", type="primary", key="del_cbtn") and del_id > 0:
+                        if execute_data("UPDATE challans SET is_deleted = 1 WHERE id = %s", (del_id,)): 
+                            st.success(f"Challan {del_id} moved to Recycle Bin!"); time.sleep(0.5); st.rerun()
+                else: st.info("No active challans found.")
+
+            elif selected_module == "🗑️ Recycle Bin":
+                st.title("🗑️ Recycle Bin (Deleted Challans)")
+                st.info("Aapke delete kiye hue challans yahan hain. Aap inhe wapas History mein restore kar sakte hain.")
+                deleted_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1 ORDER BY id DESC", (safe_name,))
+                
+                if deleted_challans:
+                    st.dataframe(pd.DataFrame(deleted_challans), width="stretch")
+                    st.markdown("---")
+                    restore_id = st.number_input("Enter Challan 'id' to Restore", min_value=0, step=1, key="res_cid")
+                    if st.button("🔄 Restore Challan", type="primary", key="res_cbtn") and restore_id > 0:
+                        if execute_data("UPDATE challans SET is_deleted = 0 WHERE id = %s", (restore_id,)): 
+                            st.success(f"Challan {restore_id} successfully restored!"); time.sleep(0.5); st.rerun()
+                else:
+                    st.success("Recycle bin ekdum khali hai!")
 
             elif selected_module == "📝 Make / Edit Challan":
                 st.title("📝 Delivery Challan Engine")
@@ -293,7 +299,8 @@ else:
                 with sc3:
                     st.write("")
                     if st.button("🔍 Search & Edit", key="s_btn"):
-                        data = fetch_data("SELECT * FROM challans WHERE challan_no = %s AND challan_date = %s AND created_by = %s", (search_no, search_date.strftime('%d/%m/%Y'), safe_name))
+                        # Sirf active challans hi search aur edit ho sakte hain
+                        data = fetch_data("SELECT * FROM challans WHERE challan_no = %s AND challan_date = %s AND created_by = %s AND is_deleted = 0", (search_no, search_date.strftime('%d/%m/%Y'), safe_name))
                         if data:
                             st.session_state.form_data = data[0]
                             try:
@@ -305,7 +312,7 @@ else:
                             st.session_state.mode = "UPDATE"
                             st.rerun()
                         else:
-                            st.error("❌ Challan not found!")
+                            st.error("❌ Challan not found or is in Recycle Bin!")
 
                 if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
                     for key in ["form_data", "form_items", "mode"]:
@@ -376,8 +383,8 @@ else:
                     saved = False
                     if mode == "INSERT":
                         saved = execute_data("""
-                            INSERT INTO challans (created_by, challan_date, challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO challans (created_by, challan_date, challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)
                         """, (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply.strftime('%d/%m/%Y'), transport_mode, place_of_supply, items_json, amt_str))
                     elif mode == "UPDATE":
                         saved = execute_data("""
