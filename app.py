@@ -60,13 +60,11 @@ def init_db():
                     )
                 """)
             else:
-                # Auto-upgrade database to support 30-Days Recycle Bin
                 try: cursor.execute("ALTER TABLE challans ADD COLUMN is_deleted INT DEFAULT 0")
                 except: pass
                 try: cursor.execute("ALTER TABLE challans ADD COLUMN deleted_at DATETIME NULL")
                 except: pass
             
-            # --- AUTO-CLEANUP ENGINE (30 Days Permanent Delete) ---
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
 
@@ -142,6 +140,10 @@ current_role = st.session_state.get("auth_role", None)
 current_name = st.session_state.get("auth_name", None)
 current_uid = st.session_state.get("auth_uid", None)
 
+# Initialize Menu State dynamically for Smart Redirects
+if "cust_menu" not in st.session_state:
+    st.session_state.cust_menu = "📝 Make / Edit Challan"
+
 # ==========================================
 # 3. LOGIN SCREEN
 # ==========================================
@@ -185,7 +187,7 @@ else:
         st.sidebar.markdown("---")
         
         if st.sidebar.button("🔒 Logout", key="logout_sidebar"):
-            for key in ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode"]:
+            for key in ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode", "cust_menu"]:
                 if key in st.session_state: del st.session_state[key]
             try:
                 cookie_manager.delete("rainbow_erp_auth", key="del_a")
@@ -203,7 +205,6 @@ else:
         # ----------------------------------------
         if safe_role == "SUPERADMIN":
             st.title("👑 Super Admin Dashboard")
-            
             all_users = fetch_data("SELECT * FROM users")
             total_clients = sum(1 for u in all_users if u['role'] == 'customer')
             challan_count_data = fetch_data("SELECT COUNT(*) as count FROM challans WHERE is_deleted = 0")
@@ -230,16 +231,10 @@ else:
             with col_right:
                 st.subheader("👥 Live User Database")
                 st.dataframe(pd.DataFrame(all_users), width="stretch")
-                st.markdown("---")
-                del_uid = st.text_input("Enter UID to delete permanently", key="admin_del_uid")
-                if st.button("🗑️ Hard Delete User", key="admin_del_btn"):
-                    if del_uid == "boss": st.error("Cannot delete Master Admin!")
-                    elif execute_data("DELETE FROM users WHERE uid = %s", (del_uid,)): 
-                        st.success("User permanently deleted!"); time.sleep(0.5); st.rerun()
             
             st.markdown("---")
             st.subheader("📜 Live Platform Challan Monitor (Active)")
-            all_challans = fetch_data("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans WHERE is_deleted = 0 ORDER BY id DESC")
+            all_challans = fetch_data("SELECT id, created_by, challan_date, challan_no, party_name, amount FROM challans WHERE is_deleted = 0 ORDER BY id DESC LIMIT 50")
             if all_challans: st.dataframe(pd.DataFrame(all_challans), width="stretch")
             else: st.info("No active challans yet.")
 
@@ -270,60 +265,83 @@ else:
                           c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing))
                     st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
 
+            # --- SMART HISTORY TAB WITH INLINE BUTTONS ---
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History")
-                user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
+                user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                
                 if user_challans:
-                    st.dataframe(pd.DataFrame(user_challans), width="stretch")
                     st.markdown("---")
-                    del_id = st.number_input("Enter Challan 'id' to delete (Move to Trash)", min_value=0, step=1, key="del_cid")
-                    if st.button("🗑️ Move to Recycle Bin", type="primary", key="del_cbtn") and del_id > 0:
-                        # Move to trash AND set timestamp
-                        if execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (del_id,)): 
-                            st.success(f"Challan {del_id} moved to Recycle Bin!"); time.sleep(0.5); st.rerun()
-                else: st.info("No active challans found.")
+                    # Table Headers
+                    h1, h2, h3, h4, h5, h6 = st.columns([1, 1.5, 1.5, 3, 2, 2])
+                    h1.write("**ID**"); h2.write("**Date**"); h3.write("**Challan No**"); h4.write("**Party Name**"); h5.write("**Amount**"); h6.write("**Actions**")
+                    st.markdown("---")
+                    
+                    # Table Rows
+                    for c in user_challans:
+                        c1, c2, c3, c4, c5, c6_edit, c6_del = st.columns([1, 1.5, 1.5, 3, 2, 1, 1])
+                        c1.write(f"#{c['id']}")
+                        c2.write(c['challan_date'])
+                        c3.write(c['challan_no'])
+                        c4.write(c['party_name'])
+                        c5.write(c['amount'])
+                        
+                        # Inline Edit Button
+                        if c6_edit.button("✏️", key=f"edit_{c['id']}", help="Edit this Challan"):
+                            full_data = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))
+                            if full_data:
+                                st.session_state.form_data = full_data[0]
+                                try:
+                                    st.session_state.form_items = json.loads(full_data[0]['items_data'])
+                                    st.session_state.item_count = len(st.session_state.form_items)
+                                except:
+                                    st.session_state.form_items = []
+                                    st.session_state.item_count = 1
+                                st.session_state.mode = "UPDATE"
+                                st.session_state.cust_menu = "📝 Make / Edit Challan" # Smart Redirect
+                                st.rerun()
+                                
+                        # Inline Delete Button
+                        if c6_del.button("🗑️", key=f"del_{c['id']}", help="Move to Recycle Bin"):
+                            if execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)):
+                                st.rerun()
+                else: 
+                    st.info("No active challans found.")
 
+            # --- SMART RECYCLE BIN TAB WITH INLINE RESTORE ---
             elif selected_module == "🗑️ Recycle Bin":
-                st.title("🗑️ Recycle Bin (Deleted Challans)")
+                st.title("🗑️ Recycle Bin")
                 st.info("⚠️ Items yahan 30 din tak rahenge, uske baad automatically permanently delete ho jayenge.")
                 
-                deleted_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount, DATE_FORMAT(deleted_at, '%d-%m-%Y %H:%i') as deleted_on FROM challans WHERE created_by = %s AND is_deleted = 1 ORDER BY id DESC", (safe_name,))
+                deleted_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount, DATE_FORMAT(deleted_at, '%d-%m-%Y %H:%i') as deleted_on FROM challans WHERE created_by = %s AND is_deleted = 1 ORDER BY id DESC LIMIT 50", (safe_name,))
                 
                 if deleted_challans:
-                    st.dataframe(pd.DataFrame(deleted_challans), width="stretch")
                     st.markdown("---")
-                    restore_id = st.number_input("Enter Challan 'id' to Restore", min_value=0, step=1, key="res_cid")
-                    if st.button("🔄 Restore Challan", type="primary", key="res_cbtn") and restore_id > 0:
-                        # Restore logic removes the timestamp and sets is_deleted back to 0
-                        if execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (restore_id,)): 
-                            st.success(f"Challan {restore_id} successfully restored!"); time.sleep(0.5); st.rerun()
+                    # Table Headers
+                    h1, h2, h3, h4, h5, h6 = st.columns([1, 1.5, 1.5, 2.5, 1.5, 2])
+                    h1.write("**ID**"); h2.write("**Challan No**"); h3.write("**Deleted On**"); h4.write("**Party Name**"); h5.write("**Amount**"); h6.write("**Action**")
+                    st.markdown("---")
+                    
+                    # Table Rows
+                    for c in deleted_challans:
+                        c1, c2, c3, c4, c5, c6 = st.columns([1, 1.5, 1.5, 2.5, 1.5, 2])
+                        c1.write(f"#{c['id']}")
+                        c2.write(c['challan_no'])
+                        c3.write(c['deleted_on'])
+                        c4.write(c['party_name'])
+                        c5.write(c['amount'])
+                        
+                        if c6.button("🔄 Restore", key=f"res_{c['id']}", help="Restore to History"):
+                            if execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)): 
+                                st.rerun()
                 else:
                     st.success("Recycle bin ekdum khali hai!")
 
+            # --- UNIFIED FORM (Redirects here on Edit) ---
             elif selected_module == "📝 Make / Edit Challan":
                 st.title("📝 Delivery Challan Engine")
                 
-                sc1, sc2, sc3 = st.columns([2, 2, 1])
-                with sc1: search_no = st.text_input("Search Challan No.", key="s_no")
-                with sc2: search_date = st.date_input("Search Challan Date", key="s_date")
-                with sc3:
-                    st.write("")
-                    if st.button("🔍 Search & Edit", key="s_btn"):
-                        data = fetch_data("SELECT * FROM challans WHERE challan_no = %s AND challan_date = %s AND created_by = %s AND is_deleted = 0", (search_no, search_date.strftime('%d/%m/%Y'), safe_name))
-                        if data:
-                            st.session_state.form_data = data[0]
-                            try:
-                                st.session_state.form_items = json.loads(data[0]['items_data'])
-                                st.session_state.item_count = len(st.session_state.form_items)
-                            except:
-                                st.session_state.form_items = []
-                                st.session_state.item_count = 1
-                            st.session_state.mode = "UPDATE"
-                            st.rerun()
-                        else:
-                            st.error("❌ Challan not found or is in Recycle Bin!")
-
-                if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
+                if st.button("🔄 Clear Form (Start New)", key="c_btn"):
                     for key in ["form_data", "form_items", "mode"]:
                         if key in st.session_state: del st.session_state[key]
                     st.session_state.item_count = 1
@@ -336,7 +354,8 @@ else:
                 if 'item_count' not in st.session_state: st.session_state.item_count = 1
 
                 st.markdown("---")
-                if mode == "UPDATE": st.warning(f"⚠️ You are EDITING an existing challan (ID: {fd.get('id', '')}).")
+                if mode == "UPDATE": 
+                    st.warning(f"⚠️ You are EDITING an existing challan (ID: #{fd.get('id', '')}). Save changes below.")
                 
                 col1, col2 = st.columns(2)
                 with col1:
