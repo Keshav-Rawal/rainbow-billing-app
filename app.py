@@ -33,17 +33,14 @@ def init_db():
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
             
-            # Challans Table
             cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(20), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
             
-            # Tax Invoices Table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tax_invoices (
                     id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), invoice_date VARCHAR(20), invoice_no VARCHAR(50), vendor_code VARCHAR(50), po_no VARCHAR(50), po_date VARCHAR(20), bill_to_name VARCHAR(100), bill_to_address TEXT, bill_to_gstin VARCHAR(50), bill_to_state VARCHAR(50), bill_to_state_code VARCHAR(20), ship_to_name VARCHAR(100), ship_to_address TEXT, ship_to_gstin VARCHAR(50), ship_to_state VARCHAR(50), ship_to_state_code VARCHAR(20), transport_mode VARCHAR(50), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL
                 )
             """)
             
-            # --- 30 DAY AUTO-CLEANUP ---
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
             try: cursor.execute("DELETE FROM tax_invoices WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
@@ -73,7 +70,8 @@ def execute_data(query, params):
 
 def get_company_profile(uid):
     data = fetch_data("SELECT * FROM company_profiles WHERE uid = %s", (uid,))
-    return data[0] if data else {"name": "RAINBOW INDUSTRIES", "gstin": "09AAAAA0000A1Z1", "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", "state": "UP", "state_code": "09", "tagline": "AN ISO 9001:2015 Certified Company", "contact": "E Mail Id: rainbowindustries647@gmail.com", "manufacturing": "Manufactures of: Plastic Components, Automobiles, Electricals & Electronics."}
+    # Profile format reverted to match exact old Challan look
+    return data[0] if data else {"name": "RAINBOW INDUSTRIES", "gstin": "09AAAAA0000A1Z1", "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", "state": "UP", "state_code": "09", "tagline": "(An ISO 9001:2015 Certified Company)", "contact": "Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com", "manufacturing": "Manufactures of : Plastic Components, Automobiles, Electricals & Electronics"}
 
 def parse_date(date_str):
     if date_str:
@@ -403,7 +401,7 @@ else:
                     st.rerun()
 
         # ==========================================
-        # DELIVERY CHALLAN ENGINE (Fully Restored)
+        # DELIVERY CHALLAN ENGINE
         # ==========================================
         elif menu == "📝 Delivery Challan":
             st.title("📝 Delivery Challan Engine")
@@ -464,8 +462,24 @@ else:
                     qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
                     items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
 
+                # EXACT CSS FIX APPLIED HERE FOR CHALLAN
                 html_content = f"""
-                <!DOCTYPE html><html><head><style>@page {{ size: A4; margin: 15mm; }} body {{ font-family: Arial, sans-serif; font-size: 12px; color: #1c2d42; }} .container {{ border: 2px solid #1c2d42; width: 100%; }} .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; }} .header h2 {{ margin: 0 0 5px 0; font-size: 18px; text-decoration: underline; letter-spacing: 1.5px; font-weight: bold; }} .header h1 {{ margin: 5px 0; font-size: 32px; font-weight: 900; }} .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; }} table {{ width: 100%; border-collapse: collapse; }} td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }} .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }} .spacer-row td {{ height: 150px; border-top: none; border-bottom: none; }} .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; }} .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}</style></head>
+                <!DOCTYPE html><html><head><style>
+                @page {{ size: A4; margin: 15mm; }} 
+                body {{ font-family: Arial, sans-serif; font-size: 12px; color: #1c2d42; }} 
+                .container {{ border: 2px solid #1c2d42; width: 100%; }} 
+                .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; }} 
+                .header h2 {{ margin: 0 0 5px 0; color: #1c2d42; font-size: 18px; text-decoration: underline; letter-spacing: 1.5px; font-weight: bold; text-transform: uppercase; }} 
+                .header h1 {{ margin: 5px 0; color: #1c2d42; font-size: 32px; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 900; }} 
+                .header p {{ margin: 3px 0; font-size: 12px; color: #1c2d42; }} 
+                .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #1c2d42; line-height: 1.5; }} 
+                table {{ width: 100%; border-collapse: collapse; }} 
+                td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }} 
+                .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }} 
+                .spacer-row td {{ height: 150px; border-top: none; border-bottom: none; }} 
+                .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; }} 
+                .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
+                </style></head>
                 <body>
                     <div class="container">
                         <div class="header">
