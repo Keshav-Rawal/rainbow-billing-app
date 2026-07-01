@@ -12,7 +12,7 @@ import uuid
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
 # ==========================================
-# 1. SAFE DATABASE FUNCTIONS (No Caching)
+# 1. SAFE DATABASE FUNCTIONS
 # ==========================================
 def get_connection():
     return mysql.connector.connect(
@@ -55,14 +55,21 @@ def init_db():
                         place_of_supply VARCHAR(100),
                         items_data TEXT,
                         amount VARCHAR(50),
-                        is_deleted INT DEFAULT 0
+                        is_deleted INT DEFAULT 0,
+                        deleted_at DATETIME NULL
                     )
                 """)
             else:
-                # Auto-upgrade existing table to support Recycle Bin
+                # Auto-upgrade database to support 30-Days Recycle Bin
                 try: cursor.execute("ALTER TABLE challans ADD COLUMN is_deleted INT DEFAULT 0")
                 except: pass
-                
+                try: cursor.execute("ALTER TABLE challans ADD COLUMN deleted_at DATETIME NULL")
+                except: pass
+            
+            # --- AUTO-CLEANUP ENGINE (30 Days Permanent Delete) ---
+            try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
+            except: pass
+
             cursor.execute("SELECT COUNT(*) FROM users")
             if cursor.fetchone()[0] == 0:
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "Keshav (Master)"))
@@ -271,21 +278,24 @@ else:
                     st.markdown("---")
                     del_id = st.number_input("Enter Challan 'id' to delete (Move to Trash)", min_value=0, step=1, key="del_cid")
                     if st.button("🗑️ Move to Recycle Bin", type="primary", key="del_cbtn") and del_id > 0:
-                        if execute_data("UPDATE challans SET is_deleted = 1 WHERE id = %s", (del_id,)): 
+                        # Move to trash AND set timestamp
+                        if execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (del_id,)): 
                             st.success(f"Challan {del_id} moved to Recycle Bin!"); time.sleep(0.5); st.rerun()
                 else: st.info("No active challans found.")
 
             elif selected_module == "🗑️ Recycle Bin":
                 st.title("🗑️ Recycle Bin (Deleted Challans)")
-                st.info("Aapke delete kiye hue challans yahan hain. Aap inhe wapas History mein restore kar sakte hain.")
-                deleted_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1 ORDER BY id DESC", (safe_name,))
+                st.info("⚠️ Items yahan 30 din tak rahenge, uske baad automatically permanently delete ho jayenge.")
+                
+                deleted_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount, DATE_FORMAT(deleted_at, '%d-%m-%Y %H:%i') as deleted_on FROM challans WHERE created_by = %s AND is_deleted = 1 ORDER BY id DESC", (safe_name,))
                 
                 if deleted_challans:
                     st.dataframe(pd.DataFrame(deleted_challans), width="stretch")
                     st.markdown("---")
                     restore_id = st.number_input("Enter Challan 'id' to Restore", min_value=0, step=1, key="res_cid")
                     if st.button("🔄 Restore Challan", type="primary", key="res_cbtn") and restore_id > 0:
-                        if execute_data("UPDATE challans SET is_deleted = 0 WHERE id = %s", (restore_id,)): 
+                        # Restore logic removes the timestamp and sets is_deleted back to 0
+                        if execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (restore_id,)): 
                             st.success(f"Challan {restore_id} successfully restored!"); time.sleep(0.5); st.rerun()
                 else:
                     st.success("Recycle bin ekdum khali hai!")
@@ -299,7 +309,6 @@ else:
                 with sc3:
                     st.write("")
                     if st.button("🔍 Search & Edit", key="s_btn"):
-                        # Sirf active challans hi search aur edit ho sakte hain
                         data = fetch_data("SELECT * FROM challans WHERE challan_no = %s AND challan_date = %s AND created_by = %s AND is_deleted = 0", (search_no, search_date.strftime('%d/%m/%Y'), safe_name))
                         if data:
                             st.session_state.form_data = data[0]
