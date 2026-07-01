@@ -187,7 +187,7 @@ else:
         st.sidebar.markdown("---")
         
         if st.sidebar.button("🔒 Logout", key="logout_sidebar"):
-            for key in ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode", "cust_menu"]:
+            for key in ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode", "cust_menu", "redirect_menu"]:
                 if key in st.session_state: del st.session_state[key]
             try:
                 cookie_manager.delete("rainbow_erp_auth", key="del_a")
@@ -242,6 +242,12 @@ else:
         # B. CUSTOMER / CLIENT ERP PANEL
         # ----------------------------------------
         elif safe_role == "CUSTOMER":
+            
+            # --- SMART REDIRECT ENGINE ---
+            if "redirect_menu" in st.session_state:
+                st.session_state.cust_menu = st.session_state.redirect_menu
+                del st.session_state.redirect_menu
+
             selected_module = st.sidebar.radio("Menu", ["📝 Make / Edit Challan", "📜 Challan History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
             
             if selected_module == "⚙️ Company Profile":
@@ -272,12 +278,10 @@ else:
                 
                 if user_challans:
                     st.markdown("---")
-                    # Table Headers
                     h1, h2, h3, h4, h5, h6 = st.columns([1, 1.5, 1.5, 3, 2, 2])
                     h1.write("**ID**"); h2.write("**Date**"); h3.write("**Challan No**"); h4.write("**Party Name**"); h5.write("**Amount**"); h6.write("**Actions**")
                     st.markdown("---")
                     
-                    # Table Rows
                     for c in user_challans:
                         c1, c2, c3, c4, c5, c6_edit, c6_del = st.columns([1, 1.5, 1.5, 3, 2, 1, 1])
                         c1.write(f"#{c['id']}")
@@ -286,7 +290,6 @@ else:
                         c4.write(c['party_name'])
                         c5.write(c['amount'])
                         
-                        # Inline Edit Button
                         if c6_edit.button("✏️", key=f"edit_{c['id']}", help="Edit this Challan"):
                             full_data = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))
                             if full_data:
@@ -298,10 +301,9 @@ else:
                                     st.session_state.form_items = []
                                     st.session_state.item_count = 1
                                 st.session_state.mode = "UPDATE"
-                                st.session_state.cust_menu = "📝 Make / Edit Challan" # Smart Redirect
+                                st.session_state.redirect_menu = "📝 Make / Edit Challan" # SAFE REDIRECT TRIGGER
                                 st.rerun()
                                 
-                        # Inline Delete Button
                         if c6_del.button("🗑️", key=f"del_{c['id']}", help="Move to Recycle Bin"):
                             if execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)):
                                 st.rerun()
@@ -317,12 +319,10 @@ else:
                 
                 if deleted_challans:
                     st.markdown("---")
-                    # Table Headers
                     h1, h2, h3, h4, h5, h6 = st.columns([1, 1.5, 1.5, 2.5, 1.5, 2])
                     h1.write("**ID**"); h2.write("**Challan No**"); h3.write("**Deleted On**"); h4.write("**Party Name**"); h5.write("**Amount**"); h6.write("**Action**")
                     st.markdown("---")
                     
-                    # Table Rows
                     for c in deleted_challans:
                         c1, c2, c3, c4, c5, c6 = st.columns([1, 1.5, 1.5, 2.5, 1.5, 2])
                         c1.write(f"#{c['id']}")
