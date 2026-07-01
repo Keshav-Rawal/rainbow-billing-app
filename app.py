@@ -65,6 +65,7 @@ def init_db():
                 try: cursor.execute("ALTER TABLE challans ADD COLUMN deleted_at DATETIME NULL")
                 except: pass
             
+            # --- 30 DAY AUTO-CLEANUP ---
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
 
@@ -140,7 +141,6 @@ current_role = st.session_state.get("auth_role", None)
 current_name = st.session_state.get("auth_name", None)
 current_uid = st.session_state.get("auth_uid", None)
 
-# Initialize Menu State dynamically for Smart Redirects
 if "cust_menu" not in st.session_state:
     st.session_state.cust_menu = "📝 Make / Edit Challan"
 
@@ -271,26 +271,25 @@ else:
                           c_name, c_gst, c_address, c_state, c_state_code, c_tagline, c_contact, c_manufacturing))
                     st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
 
-            # --- SMART HISTORY TAB WITH INLINE BUTTONS ---
+            # --- SMART HISTORY TAB WITH INLINE BUTTONS (NO ID COLUMN) ---
             elif selected_module == "📜 Challan History":
                 st.title("📜 My Challan History")
                 user_challans = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
                 
                 if user_challans:
                     st.markdown("---")
-                    h1, h2, h3, h4, h5, h6 = st.columns([1, 1.5, 1.5, 3, 2, 2])
-                    h1.write("**ID**"); h2.write("**Date**"); h3.write("**Challan No**"); h4.write("**Party Name**"); h5.write("**Amount**"); h6.write("**Actions**")
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2])
+                    h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
                     st.markdown("---")
                     
                     for c in user_challans:
-                        c1, c2, c3, c4, c5, c6_edit, c6_del = st.columns([1, 1.5, 1.5, 3, 2, 1, 1])
-                        c1.write(f"#{c['id']}")
-                        c2.write(c['challan_date'])
-                        c3.write(c['challan_no'])
-                        c4.write(c['party_name'])
-                        c5.write(c['amount'])
+                        c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
+                        c1.write(c['challan_date'])
+                        c2.write(c['challan_no'])
+                        c3.write(c['party_name'])
+                        c4.write(c['amount'])
                         
-                        if c6_edit.button("✏️", key=f"edit_{c['id']}", help="Edit this Challan"):
+                        if c5_edit.button("✏️", key=f"edit_{c['id']}", help="Edit this Challan"):
                             full_data = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))
                             if full_data:
                                 st.session_state.form_data = full_data[0]
@@ -301,16 +300,16 @@ else:
                                     st.session_state.form_items = []
                                     st.session_state.item_count = 1
                                 st.session_state.mode = "UPDATE"
-                                st.session_state.redirect_menu = "📝 Make / Edit Challan" # SAFE REDIRECT TRIGGER
+                                st.session_state.redirect_menu = "📝 Make / Edit Challan"
                                 st.rerun()
                                 
-                        if c6_del.button("🗑️", key=f"del_{c['id']}", help="Move to Recycle Bin"):
+                        if c5_del.button("🗑️", key=f"del_{c['id']}", help="Move to Recycle Bin"):
                             if execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)):
                                 st.rerun()
                 else: 
                     st.info("No active challans found.")
 
-            # --- SMART RECYCLE BIN TAB WITH INLINE RESTORE ---
+            # --- SMART RECYCLE BIN TAB WITH INLINE RESTORE (NO ID COLUMN) ---
             elif selected_module == "🗑️ Recycle Bin":
                 st.title("🗑️ Recycle Bin")
                 st.info("⚠️ Items yahan 30 din tak rahenge, uske baad automatically permanently delete ho jayenge.")
@@ -319,19 +318,18 @@ else:
                 
                 if deleted_challans:
                     st.markdown("---")
-                    h1, h2, h3, h4, h5, h6 = st.columns([1, 1.5, 1.5, 2.5, 1.5, 2])
-                    h1.write("**ID**"); h2.write("**Challan No**"); h3.write("**Deleted On**"); h4.write("**Party Name**"); h5.write("**Amount**"); h6.write("**Action**")
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 2.5, 1.5, 2])
+                    h1.write("**Challan No**"); h2.write("**Deleted On**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Action**")
                     st.markdown("---")
                     
                     for c in deleted_challans:
-                        c1, c2, c3, c4, c5, c6 = st.columns([1, 1.5, 1.5, 2.5, 1.5, 2])
-                        c1.write(f"#{c['id']}")
-                        c2.write(c['challan_no'])
-                        c3.write(c['deleted_on'])
-                        c4.write(c['party_name'])
-                        c5.write(c['amount'])
+                        c1, c2, c3, c4, c5 = st.columns([1.5, 1.5, 2.5, 1.5, 2])
+                        c1.write(c['challan_no'])
+                        c2.write(c['deleted_on'])
+                        c3.write(c['party_name'])
+                        c4.write(c['amount'])
                         
-                        if c6.button("🔄 Restore", key=f"res_{c['id']}", help="Restore to History"):
+                        if c5.button("🔄 Restore", key=f"res_{c['id']}", help="Restore to History"):
                             if execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)): 
                                 st.rerun()
                 else:
@@ -355,7 +353,7 @@ else:
 
                 st.markdown("---")
                 if mode == "UPDATE": 
-                    st.warning(f"⚠️ You are EDITING an existing challan (ID: #{fd.get('id', '')}). Save changes below.")
+                    st.warning(f"⚠️ You are EDITING an existing challan. Save changes below.")
                 
                 col1, col2 = st.columns(2)
                 with col1:
