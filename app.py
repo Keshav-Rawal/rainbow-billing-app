@@ -339,11 +339,17 @@ else:
                 with col_s:
                     st.markdown("**Shipped To Party:**")
                     same_as = st.checkbox("Same as Bill To")
-                    s_name = st.text_input("Name", b_name if same_as else fd.get('ship_to_name',''), key="s1")
-                    s_add = st.text_area("Address", b_add if same_as else fd.get('ship_to_address',''), key="s2", height=68)
-                    s_gst = st.text_input("GSTIN", b_gst if same_as else fd.get('ship_to_gstin',''), key="s3")
-                    s_state = st.text_input("State", b_state if same_as else fd.get('ship_to_state',''), key="s4")
-                    s_scode = st.text_input("State Code", b_scode if same_as else fd.get('ship_to_state_code',''), key="s5")
+                    
+                    # Disabled input fields if checkbox is ticked for better UX
+                    s_name = st.text_input("Name", b_name if same_as else fd.get('ship_to_name',''), key="s1", disabled=same_as)
+                    s_add = st.text_area("Address", b_add if same_as else fd.get('ship_to_address',''), key="s2", height=68, disabled=same_as)
+                    s_gst = st.text_input("GSTIN", b_gst if same_as else fd.get('ship_to_gstin',''), key="s3", disabled=same_as)
+                    s_state = st.text_input("State", b_state if same_as else fd.get('ship_to_state',''), key="s4", disabled=same_as)
+                    s_scode = st.text_input("State Code", b_scode if same_as else fd.get('ship_to_state_code',''), key="s5", disabled=same_as)
+                    
+                    # Force variables to take "Bill To" data unconditionally for DB & PDF
+                    if same_as:
+                        s_name, s_add, s_gst, s_state, s_scode = b_name, b_add, b_gst, b_state, b_scode
 
             st.subheader("📦 Item Details")
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
@@ -381,7 +387,6 @@ else:
                     amt_words = num2words(total_after, lang='en_IN').title() + " Only."
                     items_json = json.dumps(items_data)
 
-                    # LIVE DATA FIX APPLIED HERE
                     current_fd = {
                         'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'),
                         'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
@@ -398,7 +403,6 @@ else:
 
                     base_css = """<style>@page { size: A4; margin: 10mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 200px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     
-                    # Passing current_fd instead of fd
                     html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
                     html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
                     html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
