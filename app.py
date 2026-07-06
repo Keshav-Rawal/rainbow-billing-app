@@ -70,7 +70,6 @@ def execute_data(query, params):
 
 def get_company_profile(uid):
     data = fetch_data("SELECT * FROM company_profiles WHERE uid = %s", (uid,))
-    # Profile format reverted to match exact old Challan look
     return data[0] if data else {"name": "RAINBOW INDUSTRIES", "gstin": "09AAAAA0000A1Z1", "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", "state": "UP", "state_code": "09", "tagline": "(An ISO 9001:2015 Certified Company)", "contact": "Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com", "manufacturing": "Manufactures of : Plastic Components, Automobiles, Electricals & Electronics"}
 
 def parse_date(date_str):
@@ -382,15 +381,28 @@ else:
                     amt_words = num2words(total_after, lang='en_IN').title() + " Only."
                     items_json = json.dumps(items_data)
 
+                    # LIVE DATA FIX APPLIED HERE
+                    current_fd = {
+                        'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'),
+                        'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
+                        'transport_mode': transport_mode, 'vehicle_no': vehicle_no,
+                        'date_of_supply': date_of_supply, 'place_of_supply': place_of_supply,
+                        'bill_to_name': b_name, 'bill_to_address': b_add, 'bill_to_gstin': b_gst,
+                        'bill_to_state': b_state, 'bill_to_state_code': b_scode,
+                        'ship_to_name': s_name, 'ship_to_address': s_add, 'ship_to_gstin': s_gst,
+                        'ship_to_state': s_state, 'ship_to_state_code': s_scode
+                    }
+
                     if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
                     else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 200px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     
-                    html_1 = generate_tax_invoice_html(my_company, fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
-                    html_2 = generate_tax_invoice_html(my_company, fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
-                    html_3 = generate_tax_invoice_html(my_company, fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
-                    html_4 = generate_tax_invoice_html(my_company, fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
+                    # Passing current_fd instead of fd
+                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
+                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
+                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
+                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
 
                     full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
                     full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
@@ -462,7 +474,6 @@ else:
                     qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
                     items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
 
-                # EXACT CSS FIX APPLIED HERE FOR CHALLAN
                 html_content = f"""
                 <!DOCTYPE html><html><head><style>
                 @page {{ size: A4; margin: 15mm; }} 
