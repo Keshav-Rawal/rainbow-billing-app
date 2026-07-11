@@ -1,5 +1,6 @@
 streamlit
+extra-streamlit-components
 weasyprint
 num2words
-extra-streamlit-components
+pandas
 mysql-connector-python

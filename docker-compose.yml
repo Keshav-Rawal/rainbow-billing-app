@@ -1,0 +1,9 @@
+version: "3.8"
+services:
+  erp:
+    build: .
+    ports:
+      - "80:8501"
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
