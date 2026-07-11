@@ -40,9 +40,12 @@ def init_db():
                 )
             """)
             
-            # --- Nayi Master Tables (Autofill ke liye) ---
+            # --- Master Tables (With Party Mapping logic) ---
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10))")
-            cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), item_description VARCHAR(255), hsn_code VARCHAR(20))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20))")
+
+            try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
+            except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
@@ -93,7 +96,7 @@ if "auth_logged_in" not in st.session_state:
             st.session_state.update({"auth_logged_in": True, "auth_role": cookie_manager.get(cookie="rainbow_user_role"), "auth_name": cookie_manager.get(cookie="rainbow_user_name"), "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")})
     except: st.session_state.auth_logged_in = False
 
-if "cust_menu" not in st.session_state: st.session_state.cust_menu = "📝 Delivery Challan"
+if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
 # ==========================================
 # 3. HTML GENERATOR FOR TAX INVOICE
@@ -206,6 +209,10 @@ if not st.session_state.get("auth_logged_in"):
             time.sleep(0.5); st.rerun()
         else: st.error("❌ Invalid Credentials")
 else:
+    if not st.session_state.get('auth_role'):
+        st.session_state['auth_logged_in'] = False
+        st.rerun()
+
     role = st.session_state.auth_role.upper()
     safe_name = st.session_state.auth_name
     uid = st.session_state.auth_uid
@@ -214,7 +221,9 @@ else:
     st.sidebar.title("☁️ ERP System")
     st.sidebar.write(f"**Welcome:** {safe_name}")
     if st.sidebar.button("🔒 Logout"):
-        for k in ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode", "cust_menu", "redirect_menu", "pdf_comp", "pdf_off", "inv_no"]: st.session_state.pop(k, None)
+        keys_to_clear = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode", "cust_menu", "redirect_menu", "pdf_comp", "pdf_off", "inv_no", "sel_inv_p", "sel_chal_p"]
+        for k in list(st.session_state.keys()):
+            if k in keys_to_clear or k.startswith("trk_"): st.session_state.pop(k, None)
         cookie_manager.delete("rainbow_erp_auth"); time.sleep(0.5); st.rerun()
     
     if "redirect_menu" in st.session_state:
@@ -239,10 +248,43 @@ else:
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        # === NAYA MASTER DATA MENU ADD KIYA ===
-        menu = st.sidebar.radio("Menu", ["📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
+        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
 
-        if menu == "⚙️ Company Profile":
+        if menu == "🏢 Dashboard":
+            st.title("🏢 Client Dashboard")
+            st.write("Aapke saare permanent vendors aur clients yahan hain. Ek click mein unka specific Bill ya Challan banayein!")
+            st.markdown("---")
+            
+            parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
+            
+            if not parties_db:
+                st.info("Abhi tak koi Client add nahi kiya hai. Left menu se '📦 Add Master Data' mein jaakar apni pehli party add karein.")
+            else:
+                cols = st.columns(3)
+                for idx, p in enumerate(parties_db):
+                    with cols[idx % 3]:
+                        st.markdown(f"#### 🏢 {p['party_name']}")
+                        st.caption(f"**State:** {p['state']} | **GST:** {p['gstin']}")
+                        
+                        c_inv, c_chal = st.columns(2)
+                        if c_inv.button("📄 Invoice", key=f"d_inv_{p['id']}", use_container_width=True):
+                            st.session_state['sel_inv_p'] = p['party_name']
+                            st.session_state.redirect_menu = "📄 Tax Invoice"
+                            st.rerun()
+                            
+                        if c_chal.button("📝 Challan", key=f"d_chal_{p['id']}", use_container_width=True):
+                            st.session_state['sel_chal_p'] = p['party_name']
+                            st.session_state.redirect_menu = "📝 Delivery Challan"
+                            st.rerun()
+                            
+                        if st.button("🗑️ Delete Party", key=f"d_del_{p['id']}", use_container_width=True):
+                            execute_data("DELETE FROM party_master WHERE id=%s", (p['id'],))
+                            execute_data("DELETE FROM item_master WHERE party_name=%s AND uid=%s", (p['party_name'], uid)) 
+                            st.rerun()
+                        
+                        st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+
+        elif menu == "⚙️ Company Profile":
             st.title("⚙️ Dynamic Company Profile")
             c_name = st.text_input("Company/Factory Name", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
@@ -256,48 +298,50 @@ else:
                 execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu))
                 st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
             
-        # ==========================================
-        # 📦 NEW: MASTER DATA MANAGEMENT PAGE
-        # ==========================================
         elif menu == "📦 Add Master Data":
             st.title("📦 Master Data Management")
-            st.write("Save Parties & Items here to Autofill them in Invoices and Challans!")
             
             c1, c2 = st.columns(2)
             with c1:
-                st.subheader("👥 Add New Party / Client")
+                st.subheader("👥 Add New Party")
                 with st.form("p_m", clear_on_submit=True):
                     pn = st.text_input("Party Name *")
                     pa = st.text_area("Address *")
                     pg = st.text_input("GSTIN")
                     ps = st.text_input("State")
                     pc = st.text_input("State Code")
-                    if st.form_submit_button("Save Party to Master"):
+                    if st.form_submit_button("Save Party"):
                         if pn and pa:
                             execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code) VALUES (%s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc))
-                            st.success(f"{pn} Saved Successfully!")
+                            st.success(f"Party '{pn}' Saved Successfully!")
                         else: st.error("Name and Address are required!")
-                
-                # Show saved parties
-                saved_parties = fetch_data("SELECT party_name, gstin FROM party_master WHERE uid=%s", (uid,))
-                if saved_parties:
-                    with st.expander("View Saved Parties"): st.dataframe(pd.DataFrame(saved_parties))
 
             with c2:
-                st.subheader("📦 Add New Item / Product")
-                with st.form("i_m", clear_on_submit=True):
-                    idsc = st.text_input("Item Description *")
-                    ihsn = st.text_input("HSN Code")
-                    if st.form_submit_button("Save Item to Master"):
-                        if idsc:
-                            execute_data("INSERT INTO item_master (uid, item_description, hsn_code) VALUES (%s, %s, %s)", (uid, idsc, ihsn))
-                            st.success(f"{idsc} Saved Successfully!")
-                        else: st.error("Item Description is required!")
+                st.subheader("📦 Add Items specific to a Party")
+                saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
-                # Show saved items
-                saved_items = fetch_data("SELECT item_description, hsn_code FROM item_master WHERE uid=%s", (uid,))
+                if not saved_parties:
+                    st.warning("⚠️ Pehle left side se Party add karein, fir uske items add kar payenge.")
+                else:
+                    with st.form("i_m", clear_on_submit=True):
+                        linked_party = st.selectbox("Select Party for this Item *", saved_parties)
+                        idsc = st.text_input("Item Description *")
+                        ihsn = st.text_input("HSN Code")
+                        if st.form_submit_button("Save Item for this Party"):
+                            if idsc:
+                                execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code) VALUES (%s, %s, %s, %s)", (uid, linked_party, idsc, ihsn))
+                                st.success(f"Item saved specifically for {linked_party}!")
+                            else: st.error("Item Description is required!")
+                
+                saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code FROM item_master WHERE uid=%s", (uid,))
                 if saved_items:
-                    with st.expander("View Saved Items"): st.dataframe(pd.DataFrame(saved_items))
+                    with st.expander("🗑️ View / Delete Saved Items"):
+                        for itm in saved_items:
+                            col_a, col_b = st.columns([4, 1])
+                            col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']})")
+                            if col_b.button("Del", key=f"del_it_{itm['id']}"):
+                                execute_data("DELETE FROM item_master WHERE id=%s", (itm['id'],))
+                                st.rerun()
 
         elif menu == "📜 History":
             st.title("📜 Document History")
@@ -346,17 +390,17 @@ else:
                         if c4.button("🔄 Restore", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
 
         # ==========================================
-        # TAX INVOICE ENGINE (With Autofill)
+        # TAX INVOICE ENGINE
         # ==========================================
         elif menu == "📄 Tax Invoice":
             st.title("📄 Tax Invoice Engine")
             
-            # Fetch Master Data
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
-            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s", (uid,))
             
             if st.button("🔄 Clear Form (New Invoice)", key="c_inv"):
-                for k in ["form_data", "form_items", "mode", "pdf_comp", "pdf_off", "inv_no"]: st.session_state.pop(k, None)
+                keys_to_clear = ["form_data", "form_items", "mode", "pdf_comp", "pdf_off", "inv_no", "sel_inv_p"]
+                for k in list(st.session_state.keys()):
+                    if k in keys_to_clear or k.startswith("trk_"): st.session_state.pop(k, None)
                 st.session_state.item_count = 1; st.rerun()
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
@@ -381,20 +425,28 @@ else:
                 col_b, col_s = st.columns(2)
                 with col_b:
                     st.markdown("**Bill To Party:**")
-                    # AUTOFILL PARTY LOGIC
                     party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
+                    
                     sel_p = st.selectbox("Autofill Party Details", party_names, key="sel_inv_p")
                     
-                    def_b_name, def_b_add, def_b_gst, def_b_state, def_b_scode = fd.get('bill_to_name',''), fd.get('bill_to_address',''), fd.get('bill_to_gstin',''), fd.get('bill_to_state',''), fd.get('bill_to_state_code','')
-                    if sel_p != "-- Select Party from Master --":
-                        pm = next((p for p in parties_db if p['party_name'] == sel_p), None)
-                        if pm: def_b_name, def_b_add, def_b_gst, def_b_state, def_b_scode = pm['party_name'], pm['address'], pm['gstin'], pm['state'], pm['state_code']
+                    # MAGIC TRACKER - PARTY
+                    if "trk_p_inv" not in st.session_state: st.session_state["trk_p_inv"] = sel_p
+                    if st.session_state["trk_p_inv"] != sel_p:
+                        st.session_state["trk_p_inv"] = sel_p
+                        if sel_p != "-- Select Party from Master --":
+                            pm = next((p for p in parties_db if p['party_name'] == sel_p), None)
+                            if pm:
+                                st.session_state["b1"] = pm['party_name']
+                                st.session_state["b2"] = pm['address']
+                                st.session_state["b3"] = pm['gstin']
+                                st.session_state["b4"] = pm['state']
+                                st.session_state["b5"] = pm['state_code']
                         
-                    b_name = st.text_input("Name", def_b_name, key="b1")
-                    b_add = st.text_area("Address", def_b_add, key="b2", height=68)
-                    b_gst = st.text_input("GSTIN", def_b_gst, key="b3")
-                    b_state = st.text_input("State", def_b_state, key="b4")
-                    b_scode = st.text_input("State Code", def_b_scode, key="b5")
+                    b_name = st.text_input("Name", fd.get('bill_to_name',''), key="b1")
+                    b_add = st.text_area("Address", fd.get('bill_to_address',''), key="b2", height=68)
+                    b_gst = st.text_input("GSTIN", fd.get('bill_to_gstin',''), key="b3")
+                    b_state = st.text_input("State", fd.get('bill_to_state',''), key="b4")
+                    b_scode = st.text_input("State Code", fd.get('bill_to_state_code',''), key="b5")
                 with col_s:
                     st.markdown("**Shipped To Party:**")
                     same_as = st.checkbox("Same as Bill To")
@@ -408,27 +460,41 @@ else:
                     if same_as: s_name, s_add, s_gst, s_state, s_scode = b_name, b_add, b_gst, b_state, b_scode
 
             st.subheader("📦 Item Details")
+            
+            # Filter Items dynamically
+            if sel_p != "-- Select Party from Master --":
+                items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
+            else:
+                items_db = []
+                
+            item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
+            
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
             if col_btn1.button("➕ Add Item"): st.session_state.item_count += 1; st.rerun()
             if col_btn2.button("➖ Remove Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
             items_data = []
-            item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
             
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
                 
-                # AUTOFILL ITEM LOGIC
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_{i}")
-                def_desc, def_hsn = ex.get('desc',''), ex.get('hsn','')
-                if sel_it != "-- Custom Item --":
-                    im = next((it for it in items_db if it['item_description'] == sel_it), None)
-                    if im: def_desc, def_hsn = im['item_description'], im['hsn_code']
+                sel_it = st.selectbox(f"Autofill Item {i+1} (Filtered for {sel_p if sel_p != '-- Select Party from Master --' else 'Custom'})", item_opts, key=f"sel_it_inv_{i}")
+                
+                # MAGIC TRACKER - ITEMS
+                trk_key = f"trk_it_inv_{i}"
+                if trk_key not in st.session_state: st.session_state[trk_key] = sel_it
+                if st.session_state[trk_key] != sel_it:
+                    st.session_state[trk_key] = sel_it
+                    if sel_it != "-- Custom Item --":
+                        im = next((it for it in items_db if it['item_description'] == sel_it), None)
+                        if im:
+                            st.session_state[f"id_{i}"] = im['item_description']
+                            st.session_state[f"ih_{i}"] = im['hsn_code']
 
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                with c1: desc = st.text_input("Description", def_desc, key=f"id_{i}")
-                with c2: hsn = st.text_input("HSN Code", def_hsn, key=f"ih_{i}")
+                with c1: desc = st.text_input("Description", ex.get('desc',''), key=f"id_{i}")
+                with c2: hsn = st.text_input("HSN Code", ex.get('hsn',''), key=f"ih_{i}")
                 with c3: boxes = st.text_input("Boxes", ex.get('boxes',''), key=f"ib_{i}")
                 with c4: qty = st.number_input("Qty", value=float(ex.get('qty',0)), min_value=0.0, key=f"iq_{i}")
                 with c5: rate = st.number_input("Rate", value=float(ex.get('rate',0)), min_value=0.0, key=f"ir_{i}")
@@ -483,17 +549,17 @@ else:
                     st.rerun()
 
         # ==========================================
-        # DELIVERY CHALLAN ENGINE (With Autofill)
+        # DELIVERY CHALLAN ENGINE
         # ==========================================
         elif menu == "📝 Delivery Challan":
             st.title("📝 Delivery Challan Engine")
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
-            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s", (uid,))
             
             if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
-                for key in ["form_data", "form_items", "mode"]:
-                    if key in st.session_state: del st.session_state[key]
+                keys_to_clear = ["form_data", "form_items", "mode", "sel_chal_p"]
+                for k in list(st.session_state.keys()):
+                    if k in keys_to_clear or k.startswith("trk_"): st.session_state.pop(k, None)
                 st.session_state.item_count = 1; st.rerun()
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
@@ -503,20 +569,28 @@ else:
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Dispatch To Party Details:**")
-                # AUTOFILL PARTY LOGIC
                 party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
+                
                 sel_p = st.selectbox("Autofill Party Details", party_names, key="sel_chal_p")
                 
-                def_p_name, def_p_add, def_p_gst, def_p_state, def_p_scode = fd.get('party_name',''), fd.get('party_address',''), fd.get('party_gstin',''), fd.get('party_state',''), fd.get('party_state_code','')
-                if sel_p != "-- Select Party from Master --":
-                    pm = next((p for p in parties_db if p['party_name'] == sel_p), None)
-                    if pm: def_p_name, def_p_add, def_p_gst, def_p_state, def_p_scode = pm['party_name'], pm['address'], pm['gstin'], pm['state'], pm['state_code']
-                
-                party_name = st.text_input("Dispatch To (Party Name)", value=def_p_name, key="p_name")
-                party_address = st.text_area("Party Address", value=def_p_add, key="p_add")
-                party_gstin = st.text_input("Party GSTIN", value=def_p_gst, key="p_gst")
-                party_state = st.text_input("Party State", value=def_p_state, key="p_state")
-                party_state_code = st.text_input("Party State Code", value=def_p_scode, key="p_scode")
+                # MAGIC TRACKER - PARTY (CHALLAN)
+                if "trk_p_chal" not in st.session_state: st.session_state["trk_p_chal"] = sel_p
+                if st.session_state["trk_p_chal"] != sel_p:
+                    st.session_state["trk_p_chal"] = sel_p
+                    if sel_p != "-- Select Party from Master --":
+                        pm = next((p for p in parties_db if p['party_name'] == sel_p), None)
+                        if pm:
+                            st.session_state["p_name"] = pm['party_name']
+                            st.session_state["p_add"] = pm['address']
+                            st.session_state["p_gst"] = pm['gstin']
+                            st.session_state["p_state"] = pm['state']
+                            st.session_state["p_scode"] = pm['state_code']
+                            
+                party_name = st.text_input("Dispatch To (Party Name)", value=fd.get('party_name',''), key="p_name")
+                party_address = st.text_area("Party Address", value=fd.get('party_address',''), key="p_add")
+                party_gstin = st.text_input("Party GSTIN", value=fd.get('party_gstin',''), key="p_gst")
+                party_state = st.text_input("Party State", value=fd.get('party_state',''), key="p_state")
+                party_state_code = st.text_input("Party State Code", value=fd.get('party_state_code',''), key="p_scode")
             with col2:
                 st.markdown("**Challan Details:**")
                 challan_no = st.text_input("Challan No.", value=fd.get('challan_no', ''), key="c_no")
@@ -527,27 +601,40 @@ else:
                 place_of_supply = st.text_input("Place of Supply", value=fd.get('place_of_supply', ''), key="p_sup")
 
             st.subheader("📦 Item Details")
+            
+            if sel_p != "-- Select Party from Master --":
+                items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
+            else:
+                items_db = []
+                
+            item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
+
             c_btn1, c_btn2, _ = st.columns([2, 2, 8])
             if c_btn1.button("➕ Add Item", key="add_item"): st.session_state.item_count += 1; st.rerun()
             if c_btn2.button("➖ Remove Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
             items_data = []
-            item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
             
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
                 
-                # AUTOFILL ITEM LOGIC
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_{i}")
-                def_desc, def_hsn = ex.get('desc',''), ex.get('hsn','')
-                if sel_it != "-- Custom Item --":
-                    im = next((it for it in items_db if it['item_description'] == sel_it), None)
-                    if im: def_desc, def_hsn = im['item_description'], im['hsn_code']
+                sel_it = st.selectbox(f"Autofill Item {i+1} (Filtered for {sel_p if sel_p != '-- Select Party from Master --' else 'Custom'})", item_opts, key=f"sel_it_chal_{i}")
+                
+                # MAGIC TRACKER - ITEM (CHALLAN)
+                trk_key = f"trk_it_chal_{i}"
+                if trk_key not in st.session_state: st.session_state[trk_key] = sel_it
+                if st.session_state[trk_key] != sel_it:
+                    st.session_state[trk_key] = sel_it
+                    if sel_it != "-- Custom Item --":
+                        im = next((it for it in items_db if it['item_description'] == sel_it), None)
+                        if im:
+                            st.session_state[f"desc_{i}"] = im['item_description']
+                            st.session_state[f"hsn_{i}"] = im['hsn_code']
 
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                with c1: desc = st.text_input("Description", def_desc, key=f"desc_{i}")
-                with c2: hsn = st.text_input("HSN Code", def_hsn, key=f"hsn_{i}")
+                with c1: desc = st.text_input("Description", ex.get('desc',''), key=f"desc_{i}")
+                with c2: hsn = st.text_input("HSN Code", ex.get('hsn',''), key=f"hsn_{i}")
                 with c3: boxes = st.text_input("Boxes", ex.get('boxes',''), key=f"box_{i}")
                 with c4: qty = st.number_input("Qty", value=float(ex.get('qty',0)), min_value=0.0, key=f"qty_{i}")
                 with c5: rate = st.number_input("Rate", value=float(ex.get('rate',0)), min_value=0.0, key=f"rate_{i}")
