@@ -41,11 +41,9 @@ def init_db():
                 )
             """)
             
-            # --- Master Tables (With Place of Supply) ---
-            cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20))")
 
-            # Update purani table automatic if needed
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN place_of_supply VARCHAR(100)"); conn.commit()
@@ -88,7 +86,6 @@ def parse_date(date_str):
         except: pass
     return datetime.date.today()
 
-# === HELPER: Auto-Increment Invoice & Challan ===
 def get_next_auto_no(table_name, col_name, created_by):
     data = fetch_data(f"SELECT {col_name} FROM {table_name} WHERE created_by = %s ORDER BY id DESC LIMIT 1", (created_by,))
     if data and data[0][col_name]:
@@ -100,6 +97,12 @@ def get_next_auto_no(table_name, col_name, created_by):
             return val[:-len(num_str)] + padded_num
         return val + "-1"
     return "1"
+
+# === TIMEZONE HELPER ===
+def get_ist_time():
+    # UTC time mein 5 ghante 30 minute add karna (IST)
+    ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
 # 2. SESSION & AUTH MANAGER
@@ -326,7 +329,7 @@ else:
                     pg = st.text_input("GSTIN")
                     ps = st.text_input("State")
                     pc = st.text_input("State Code")
-                    ppos = st.text_input("Place of Supply (City/State)") # Naya Field
+                    ppos = st.text_input("Place of Supply (City/State)")
                     if st.form_submit_button("Save Party"):
                         if pn and pa:
                             execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
@@ -365,7 +368,6 @@ else:
             view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
-                # NAYA: Party-wise Filter
                 party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Parties"] + [p['party_name'] for p in party_list]
                 sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_chal")
@@ -429,22 +431,41 @@ else:
         # ==========================================
         elif menu == "📄 Tax Invoice":
             st.title("📄 Tax Invoice Engine")
-            
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             
             if st.button("🔄 Clear Form (New Invoice)", key="c_inv"):
-                keys_to_clear = ["form_data", "form_items", "mode", "pdf_comp", "pdf_off", "inv_no", "sel_inv_p"]
+                preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
-                    if k in keys_to_clear or k.startswith("trk_") or k.startswith("pos_") or k.startswith("d_sup_"): st.session_state.pop(k, None)
+                    if k not in preserve: st.session_state.pop(k, None)
                 st.session_state.item_count = 1; st.rerun()
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ EDITING existing Invoice.")
 
-            # Auto Generate Invoice No and Date/Time System
             def_inv_no = fd.get('invoice_no', get_next_auto_no('tax_invoices', 'invoice_no', safe_name)) if mode == "INSERT" else fd.get('invoice_no','')
-            def_date_time = datetime.datetime.now().strftime("%d/%m/%Y %I:%M %p")
+            def_date_time = get_ist_time()
+
+            dash_party = st.session_state.pop('sel_inv_p', None)
+            party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
+            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
+
+            if dash_party and dash_party != "-- Select Party from Master --":
+                pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
+                if pm:
+                    st.session_state.b1 = pm['party_name']
+                    st.session_state.b2 = pm['address']
+                    st.session_state.b3 = pm['gstin']
+                    st.session_state.b4 = pm['state']
+                    st.session_state.b5 = pm['state_code']
+                    st.session_state.pos_inv = pm.get('place_of_supply', '')
+            elif 'b1' not in st.session_state:
+                st.session_state.b1 = fd.get('bill_to_name', '')
+                st.session_state.b2 = fd.get('bill_to_address', '')
+                st.session_state.b3 = fd.get('bill_to_gstin', '')
+                st.session_state.b4 = fd.get('bill_to_state', '')
+                st.session_state.b5 = fd.get('bill_to_state_code', '')
+                st.session_state.pos_inv = fd.get('place_of_supply', '')
 
             with st.expander("📌 Invoice & Transport Details", expanded=True):
                 c1, c2, c3, c4 = st.columns(4)
@@ -457,50 +478,60 @@ else:
                 po_date = c5.date_input("P.O. Date", parse_date(fd.get('po_date')))
                 transport_mode = c6.text_input("Transport Mode", fd.get('transport_mode','Road'))
                 vehicle_no = c7.text_input("Vehicle No.", fd.get('vehicle_no',''))
-                
-                # Default Date & Time system
                 date_of_supply = c8.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time))
 
             with st.expander("🏢 Parties Details", expanded=True):
                 col_b, col_s = st.columns(2)
                 with col_b:
                     st.markdown("**Bill To Party:**")
-                    party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-                    sel_p = st.selectbox("Autofill Party Details", party_names, key="sel_inv_p")
                     
-                    # Tracker
-                    if "trk_p_inv" not in st.session_state: st.session_state["trk_p_inv"] = sel_p
-                    if st.session_state["trk_p_inv"] != sel_p:
-                        st.session_state["trk_p_inv"] = sel_p
-                        if sel_p != "-- Select Party from Master --":
-                            pm = next((p for p in parties_db if p['party_name'] == sel_p), None)
+                    def autofill_inv_party():
+                        sel = st.session_state.sel_inv_p_widget
+                        if sel != "-- Select Party from Master --":
+                            pm = next((p for p in parties_db if p['party_name'] == sel), None)
                             if pm:
-                                st.session_state["b1"] = pm['party_name']
-                                st.session_state["b2"] = pm['address']
-                                st.session_state["b3"] = pm['gstin']
-                                st.session_state["b4"] = pm['state']
-                                st.session_state["b5"] = pm['state_code']
-                                st.session_state["pos_inv"] = pm.get('place_of_supply', '')
+                                st.session_state.b1 = pm['party_name']
+                                st.session_state.b2 = pm['address']
+                                st.session_state.b3 = pm['gstin']
+                                st.session_state.b4 = pm['state']
+                                st.session_state.b5 = pm['state_code']
+                                st.session_state.pos_inv = pm.get('place_of_supply', '')
+                        else:
+                            for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
+
+                    sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_inv_p_widget", on_change=autofill_inv_party)
                         
-                    b_name = st.text_input("Name", fd.get('bill_to_name',''), key="b1")
-                    b_add = st.text_area("Address", fd.get('bill_to_address',''), key="b2", height=68)
-                    b_gst = st.text_input("GSTIN", fd.get('bill_to_gstin',''), key="b3")
+                    b_name = st.text_input("Name", key="b1")
+                    b_add = st.text_area("Address", key="b2", height=68)
+                    b_gst = st.text_input("GSTIN", key="b3")
                     c_st1, c_st2, c_st3 = st.columns(3)
-                    with c_st1: b_state = st.text_input("State", fd.get('bill_to_state',''), key="b4")
-                    with c_st2: b_scode = st.text_input("State Code", fd.get('bill_to_state_code',''), key="b5")
-                    with c_st3: place_of_supply = st.text_input("Place of Supply", fd.get('place_of_supply',''), key="pos_inv")
+                    with c_st1: b_state = st.text_input("State", key="b4")
+                    with c_st2: b_scode = st.text_input("State Code", key="b5")
+                    with c_st3: place_of_supply = st.text_input("Place of Supply", key="pos_inv")
                 
                 with col_s:
                     st.markdown("**Shipped To Party:**")
+                    
+                    if 's1' not in st.session_state:
+                        st.session_state.s1 = fd.get('ship_to_name', '')
+                        st.session_state.s2 = fd.get('ship_to_address', '')
+                        st.session_state.s3 = fd.get('ship_to_gstin', '')
+                        st.session_state.s4 = fd.get('ship_to_state', '')
+                        st.session_state.s5 = fd.get('ship_to_state_code', '')
+
                     same_as = st.checkbox("Same as Bill To")
+                    if same_as:
+                        st.session_state.s1 = st.session_state.b1
+                        st.session_state.s2 = st.session_state.b2
+                        st.session_state.s3 = st.session_state.b3
+                        st.session_state.s4 = st.session_state.b4
+                        st.session_state.s5 = st.session_state.b5
                     
-                    s_name = st.text_input("Name", b_name if same_as else fd.get('ship_to_name',''), key="s1", disabled=same_as)
-                    s_add = st.text_area("Address", b_add if same_as else fd.get('ship_to_address',''), key="s2", height=68, disabled=same_as)
-                    s_gst = st.text_input("GSTIN", b_gst if same_as else fd.get('ship_to_gstin',''), key="s3", disabled=same_as)
-                    s_state = st.text_input("State", b_state if same_as else fd.get('ship_to_state',''), key="s4", disabled=same_as)
-                    s_scode = st.text_input("State Code", b_scode if same_as else fd.get('ship_to_state_code',''), key="s5", disabled=same_as)
-                    
-                    if same_as: s_name, s_add, s_gst, s_state, s_scode = b_name, b_add, b_gst, b_state, b_scode
+                    s_name = st.text_input("Name", key="s1", disabled=same_as)
+                    s_add = st.text_area("Address", key="s2", height=68, disabled=same_as)
+                    s_gst = st.text_input("GSTIN", key="s3", disabled=same_as)
+                    s_state = st.text_input("State", key="s4", disabled=same_as)
+                    s_scode = st.text_input("State Code", key="s5", disabled=same_as)
 
             st.subheader("📦 Item Details")
             if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
@@ -512,28 +543,34 @@ else:
             if col_btn1.button("➕ Add Item"): st.session_state.item_count += 1; st.rerun()
             if col_btn2.button("➖ Remove Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
+            def autofill_inv_item(index, db):
+                sel = st.session_state[f"sel_it_inv_widget_{index}"]
+                if sel != "-- Custom Item --":
+                    im = next((it for it in db if it['item_description'] == sel), None)
+                    if im:
+                        st.session_state[f"id_{index}"] = im['item_description']
+                        st.session_state[f"ih_{index}"] = im['hsn_code']
+
             items_data = []
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_{i}")
                 
-                trk_key = f"trk_it_inv_{i}"
-                if trk_key not in st.session_state: st.session_state[trk_key] = sel_it
-                if st.session_state[trk_key] != sel_it:
-                    st.session_state[trk_key] = sel_it
-                    if sel_it != "-- Custom Item --":
-                        im = next((it for it in items_db if it['item_description'] == sel_it), None)
-                        if im:
-                            st.session_state[f"id_{i}"] = im['item_description']
-                            st.session_state[f"ih_{i}"] = im['hsn_code']
+                if f"id_{i}" not in st.session_state:
+                    st.session_state[f"id_{i}"] = ex.get('desc', '')
+                    st.session_state[f"ih_{i}"] = ex.get('hsn', '')
+                    st.session_state[f"ib_{i}"] = ex.get('boxes', '')
+                    st.session_state[f"iq_{i}"] = float(ex.get('qty', 0))
+                    st.session_state[f"ir_{i}"] = float(ex.get('rate', 0))
 
+                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
+                
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                with c1: desc = st.text_input("Description", ex.get('desc',''), key=f"id_{i}")
-                with c2: hsn = st.text_input("HSN Code", ex.get('hsn',''), key=f"ih_{i}")
-                with c3: boxes = st.text_input("Boxes", ex.get('boxes',''), key=f"ib_{i}")
-                with c4: qty = st.number_input("Qty", value=float(ex.get('qty',0)), min_value=0.0, key=f"iq_{i}")
-                with c5: rate = st.number_input("Rate", value=float(ex.get('rate',0)), min_value=0.0, key=f"ir_{i}")
+                with c1: desc = st.text_input("Description", key=f"id_{i}")
+                with c2: hsn = st.text_input("HSN Code", key=f"ih_{i}")
+                with c3: boxes = st.text_input("Boxes", key=f"ib_{i}")
+                with c4: qty = st.number_input("Qty", min_value=0.0, key=f"iq_{i}")
+                with c5: rate = st.number_input("Rate", min_value=0.0, key=f"ir_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
@@ -589,50 +626,70 @@ else:
         # ==========================================
         elif menu == "📝 Delivery Challan":
             st.title("📝 Delivery Challan Engine")
-            
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             
             if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
-                keys_to_clear = ["form_data", "form_items", "mode", "sel_chal_p"]
+                preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
-                    if k in keys_to_clear or k.startswith("trk_") or k.startswith("pos_") or k.startswith("d_sup_"): st.session_state.pop(k, None)
+                    if k not in preserve: st.session_state.pop(k, None)
                 st.session_state.item_count = 1; st.rerun()
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ EDITING existing challan.")
             
-            # Auto Generate Challan No and Date/Time System
             def_chal_no = fd.get('challan_no', get_next_auto_no('challans', 'challan_no', safe_name)) if mode == "INSERT" else fd.get('challan_no','')
-            def_date_time = datetime.datetime.now().strftime("%d/%m/%Y %I:%M %p")
+            def_date_time = get_ist_time()
+
+            dash_party = st.session_state.pop('sel_chal_p', None)
+            party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
+            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
+            
+            if dash_party and dash_party != "-- Select Party from Master --":
+                pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
+                if pm:
+                    st.session_state.p_name = pm['party_name']
+                    st.session_state.p_add = pm['address']
+                    st.session_state.p_gst = pm['gstin']
+                    st.session_state.p_state = pm['state']
+                    st.session_state.p_scode = pm['state_code']
+                    st.session_state.pos_chal = pm.get('place_of_supply', '')
+            elif 'p_name' not in st.session_state:
+                st.session_state.p_name = fd.get('party_name', '')
+                st.session_state.p_add = fd.get('party_address', '')
+                st.session_state.p_gst = fd.get('party_gstin', '')
+                st.session_state.p_state = fd.get('party_state', '')
+                st.session_state.p_scode = fd.get('party_state_code', '')
+                st.session_state.pos_chal = fd.get('place_of_supply', '')
 
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Dispatch To Party Details:**")
-                party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-                sel_p = st.selectbox("Autofill Party Details", party_names, key="sel_chal_p")
                 
-                if "trk_p_chal" not in st.session_state: st.session_state["trk_p_chal"] = sel_p
-                if st.session_state["trk_p_chal"] != sel_p:
-                    st.session_state["trk_p_chal"] = sel_p
-                    if sel_p != "-- Select Party from Master --":
-                        pm = next((p for p in parties_db if p['party_name'] == sel_p), None)
+                def autofill_chal_party():
+                    sel = st.session_state.sel_chal_p_widget
+                    if sel != "-- Select Party from Master --":
+                        pm = next((p for p in parties_db if p['party_name'] == sel), None)
                         if pm:
-                            st.session_state["p_name"] = pm['party_name']
-                            st.session_state["p_add"] = pm['address']
-                            st.session_state["p_gst"] = pm['gstin']
-                            st.session_state["p_state"] = pm['state']
-                            st.session_state["p_scode"] = pm['state_code']
-                            st.session_state["pos_chal"] = pm.get('place_of_supply', '')
-                            
-                party_name = st.text_input("Dispatch To (Party Name)", value=fd.get('party_name',''), key="p_name")
-                party_address = st.text_area("Party Address", value=fd.get('party_address',''), key="p_add")
-                party_gstin = st.text_input("Party GSTIN", value=fd.get('party_gstin',''), key="p_gst")
+                            st.session_state.p_name = pm['party_name']
+                            st.session_state.p_add = pm['address']
+                            st.session_state.p_gst = pm['gstin']
+                            st.session_state.p_state = pm['state']
+                            st.session_state.p_scode = pm['state_code']
+                            st.session_state.pos_chal = pm.get('place_of_supply', '')
+                    else:
+                        for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
+                
+                sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_chal_p_widget", on_change=autofill_chal_party)
+                        
+                party_name = st.text_input("Dispatch To (Party Name)", key="p_name")
+                party_address = st.text_area("Party Address", key="p_add")
+                party_gstin = st.text_input("Party GSTIN", key="p_gst")
                 
                 c_st1, c_st2, c_st3 = st.columns(3)
-                with c_st1: party_state = st.text_input("Party State", value=fd.get('party_state',''), key="p_state")
-                with c_st2: party_state_code = st.text_input("State Code", value=fd.get('party_state_code',''), key="p_scode")
-                with c_st3: place_of_supply = st.text_input("Place of Supply", value=fd.get('place_of_supply', ''), key="pos_chal")
+                with c_st1: party_state = st.text_input("Party State", key="p_state")
+                with c_st2: party_state_code = st.text_input("State Code", key="p_scode")
+                with c_st3: place_of_supply = st.text_input("Place of Supply", key="pos_chal")
                 
             with col2:
                 st.markdown("**Challan Details:**")
@@ -640,9 +697,7 @@ else:
                 vehicle_no = st.text_input("Vehicle No.", value=fd.get('vehicle_no', ''), key="v_no")
                 challan_date = st.date_input("Challan Date", parse_date(fd.get('challan_date')), key="c_date")
                 transport_mode = st.text_input("Transport Mode", value=fd.get('transport_mode', 'Road'), key="t_mode")
-                
-                # Default Date & Time
-                date_of_supply = st.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time), key="d_sup_chal")
+                date_of_supply = st.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time))
 
             st.subheader("📦 Item Details")
             if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
@@ -654,28 +709,34 @@ else:
             if c_btn1.button("➕ Add Item", key="add_item"): st.session_state.item_count += 1; st.rerun()
             if c_btn2.button("➖ Remove Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
+            def autofill_chal_item(index, db):
+                sel = st.session_state[f"sel_it_chal_widget_{index}"]
+                if sel != "-- Custom Item --":
+                    im = next((it for it in db if it['item_description'] == sel), None)
+                    if im:
+                        st.session_state[f"desc_{index}"] = im['item_description']
+                        st.session_state[f"hsn_{index}"] = im['hsn_code']
+
             items_data = []
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_{i}")
                 
-                trk_key = f"trk_it_chal_{i}"
-                if trk_key not in st.session_state: st.session_state[trk_key] = sel_it
-                if st.session_state[trk_key] != sel_it:
-                    st.session_state[trk_key] = sel_it
-                    if sel_it != "-- Custom Item --":
-                        im = next((it for it in items_db if it['item_description'] == sel_it), None)
-                        if im:
-                            st.session_state[f"desc_{i}"] = im['item_description']
-                            st.session_state[f"hsn_{i}"] = im['hsn_code']
-
+                if f"desc_{i}" not in st.session_state:
+                    st.session_state[f"desc_{i}"] = ex.get('desc', '')
+                    st.session_state[f"hsn_{i}"] = ex.get('hsn', '')
+                    st.session_state[f"box_{i}"] = ex.get('boxes', '')
+                    st.session_state[f"qty_{i}"] = float(ex.get('qty', 0))
+                    st.session_state[f"rate_{i}"] = float(ex.get('rate', 0))
+                
+                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
+                
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                with c1: desc = st.text_input("Description", ex.get('desc',''), key=f"desc_{i}")
-                with c2: hsn = st.text_input("HSN Code", ex.get('hsn',''), key=f"hsn_{i}")
-                with c3: boxes = st.text_input("Boxes", ex.get('boxes',''), key=f"box_{i}")
-                with c4: qty = st.number_input("Qty", value=float(ex.get('qty',0)), min_value=0.0, key=f"qty_{i}")
-                with c5: rate = st.number_input("Rate", value=float(ex.get('rate',0)), min_value=0.0, key=f"rate_{i}")
+                with c1: desc = st.text_input("Description", key=f"desc_{i}")
+                with c2: hsn = st.text_input("HSN Code", key=f"hsn_{i}")
+                with c3: boxes = st.text_input("Boxes", key=f"box_{i}")
+                with c4: qty = st.number_input("Qty", min_value=0.0, key=f"qty_{i}")
+                with c5: rate = st.number_input("Rate", min_value=0.0, key=f"rate_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
