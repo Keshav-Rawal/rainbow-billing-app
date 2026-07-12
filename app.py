@@ -8,6 +8,7 @@ import datetime
 import mysql.connector
 import json
 import uuid
+import re
 
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
@@ -32,7 +33,7 @@ def init_db():
             
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
-            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(20), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
             
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tax_invoices (
@@ -40,11 +41,14 @@ def init_db():
                 )
             """)
             
-            # --- Master Tables (With Party Mapping logic) ---
+            # --- Master Tables (With Place of Supply) ---
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20))")
 
+            # Update purani table automatic if needed
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE party_master ADD COLUMN place_of_supply VARCHAR(100)"); conn.commit()
             except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
@@ -83,6 +87,19 @@ def parse_date(date_str):
         try: return datetime.datetime.strptime(date_str, '%d/%m/%Y').date()
         except: pass
     return datetime.date.today()
+
+# === HELPER: Auto-Increment Invoice & Challan ===
+def get_next_auto_no(table_name, col_name, created_by):
+    data = fetch_data(f"SELECT {col_name} FROM {table_name} WHERE created_by = %s ORDER BY id DESC LIMIT 1", (created_by,))
+    if data and data[0][col_name]:
+        val = str(data[0][col_name])
+        m = re.search(r'(\d+)$', val)
+        if m:
+            num_str = m.group(1)
+            padded_num = str(int(num_str) + 1).zfill(len(num_str))
+            return val[:-len(num_str)] + padded_num
+        return val + "-1"
+    return "1"
 
 # ==========================================
 # 2. SESSION & AUTH MANAGER
@@ -221,9 +238,8 @@ else:
     st.sidebar.title("☁️ ERP System")
     st.sidebar.write(f"**Welcome:** {safe_name}")
     if st.sidebar.button("🔒 Logout"):
-        keys_to_clear = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "form_data", "form_items", "mode", "cust_menu", "redirect_menu", "pdf_comp", "pdf_off", "inv_no", "sel_inv_p", "sel_chal_p"]
         for k in list(st.session_state.keys()):
-            if k in keys_to_clear or k.startswith("trk_"): st.session_state.pop(k, None)
+            if k not in ["cookie_manager"]: st.session_state.pop(k, None)
         cookie_manager.delete("rainbow_erp_auth"); time.sleep(0.5); st.rerun()
     
     if "redirect_menu" in st.session_state:
@@ -310,9 +326,10 @@ else:
                     pg = st.text_input("GSTIN")
                     ps = st.text_input("State")
                     pc = st.text_input("State Code")
+                    ppos = st.text_input("Place of Supply (City/State)") # Naya Field
                     if st.form_submit_button("Save Party"):
                         if pn and pa:
-                            execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code) VALUES (%s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc))
+                            execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
                             st.success(f"Party '{pn}' Saved Successfully!")
                         else: st.error("Name and Address are required!")
 
@@ -346,8 +363,18 @@ else:
         elif menu == "📜 History":
             st.title("📜 Document History")
             view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            
             if view_type == "Delivery Challans":
-                data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                # NAYA: Party-wise Filter
+                party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
+                p_names = ["All Parties"] + [p['party_name'] for p in party_list]
+                sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_chal")
+
+                if sel_history_p == "All Parties":
+                    data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                else:
+                    data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND party_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
+                
                 if data:
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**"); st.markdown("---")
                     for c in data:
@@ -357,9 +384,17 @@ else:
                             fd = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📝 Delivery Challan"}); st.rerun()
                         if c5_del.button("🗑️", key=f"dc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("No active Challans found.")
+                else: st.info("No active Challans found for this selection.")
             else:
-                data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                party_list = fetch_data("SELECT DISTINCT bill_to_name FROM tax_invoices WHERE created_by = %s AND is_deleted = 0", (safe_name,))
+                p_names = ["All Parties"] + [p['bill_to_name'] for p in party_list]
+                sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_inv")
+
+                if sel_history_p == "All Parties":
+                    data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                else:
+                    data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND bill_to_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
+                
                 if data:
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**"); st.markdown("---")
                     for c in data:
@@ -369,7 +404,7 @@ else:
                             fd = fetch_data("SELECT * FROM tax_invoices WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📄 Tax Invoice"}); st.rerun()
                         if c5_del.button("🗑️", key=f"di_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("No active Tax Invoices found.")
+                else: st.info("No active Tax Invoices found for this selection.")
 
         elif menu == "🗑️ Recycle Bin":
             st.title("🗑️ Recycle Bin")
@@ -400,16 +435,20 @@ else:
             if st.button("🔄 Clear Form (New Invoice)", key="c_inv"):
                 keys_to_clear = ["form_data", "form_items", "mode", "pdf_comp", "pdf_off", "inv_no", "sel_inv_p"]
                 for k in list(st.session_state.keys()):
-                    if k in keys_to_clear or k.startswith("trk_"): st.session_state.pop(k, None)
+                    if k in keys_to_clear or k.startswith("trk_") or k.startswith("pos_") or k.startswith("d_sup_"): st.session_state.pop(k, None)
                 st.session_state.item_count = 1; st.rerun()
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ EDITING existing Invoice.")
 
+            # Auto Generate Invoice No and Date/Time System
+            def_inv_no = fd.get('invoice_no', get_next_auto_no('tax_invoices', 'invoice_no', safe_name)) if mode == "INSERT" else fd.get('invoice_no','')
+            def_date_time = datetime.datetime.now().strftime("%d/%m/%Y %I:%M %p")
+
             with st.expander("📌 Invoice & Transport Details", expanded=True):
                 c1, c2, c3, c4 = st.columns(4)
-                invoice_no = c1.text_input("Invoice No.", fd.get('invoice_no',''))
+                invoice_no = c1.text_input("Invoice No.", value=def_inv_no)
                 invoice_date = c2.date_input("Invoice Date", parse_date(fd.get('invoice_date')))
                 vendor_code = c3.text_input("Vendor Code", fd.get('vendor_code',''))
                 po_no = c4.text_input("P.O. No.", fd.get('po_no',''))
@@ -418,18 +457,18 @@ else:
                 po_date = c5.date_input("P.O. Date", parse_date(fd.get('po_date')))
                 transport_mode = c6.text_input("Transport Mode", fd.get('transport_mode','Road'))
                 vehicle_no = c7.text_input("Vehicle No.", fd.get('vehicle_no',''))
-                place_of_supply = c8.text_input("Place of Supply", fd.get('place_of_supply',''))
-                date_of_supply = st.text_input("Date & Time of Supply", fd.get('date_of_supply',''))
+                
+                # Default Date & Time system
+                date_of_supply = c8.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time))
 
             with st.expander("🏢 Parties Details", expanded=True):
                 col_b, col_s = st.columns(2)
                 with col_b:
                     st.markdown("**Bill To Party:**")
                     party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-                    
                     sel_p = st.selectbox("Autofill Party Details", party_names, key="sel_inv_p")
                     
-                    # MAGIC TRACKER - PARTY
+                    # Tracker
                     if "trk_p_inv" not in st.session_state: st.session_state["trk_p_inv"] = sel_p
                     if st.session_state["trk_p_inv"] != sel_p:
                         st.session_state["trk_p_inv"] = sel_p
@@ -441,12 +480,16 @@ else:
                                 st.session_state["b3"] = pm['gstin']
                                 st.session_state["b4"] = pm['state']
                                 st.session_state["b5"] = pm['state_code']
+                                st.session_state["pos_inv"] = pm.get('place_of_supply', '')
                         
                     b_name = st.text_input("Name", fd.get('bill_to_name',''), key="b1")
                     b_add = st.text_area("Address", fd.get('bill_to_address',''), key="b2", height=68)
                     b_gst = st.text_input("GSTIN", fd.get('bill_to_gstin',''), key="b3")
-                    b_state = st.text_input("State", fd.get('bill_to_state',''), key="b4")
-                    b_scode = st.text_input("State Code", fd.get('bill_to_state_code',''), key="b5")
+                    c_st1, c_st2, c_st3 = st.columns(3)
+                    with c_st1: b_state = st.text_input("State", fd.get('bill_to_state',''), key="b4")
+                    with c_st2: b_scode = st.text_input("State Code", fd.get('bill_to_state_code',''), key="b5")
+                    with c_st3: place_of_supply = st.text_input("Place of Supply", fd.get('place_of_supply',''), key="pos_inv")
+                
                 with col_s:
                     st.markdown("**Shipped To Party:**")
                     same_as = st.checkbox("Same as Bill To")
@@ -460,12 +503,8 @@ else:
                     if same_as: s_name, s_add, s_gst, s_state, s_scode = b_name, b_add, b_gst, b_state, b_scode
 
             st.subheader("📦 Item Details")
-            
-            # Filter Items dynamically
-            if sel_p != "-- Select Party from Master --":
-                items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
-            else:
-                items_db = []
+            if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
+            else: items_db = []
                 
             item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
             
@@ -474,14 +513,11 @@ else:
             if col_btn2.button("➖ Remove Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
             items_data = []
-            
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
+                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_{i}")
                 
-                sel_it = st.selectbox(f"Autofill Item {i+1} (Filtered for {sel_p if sel_p != '-- Select Party from Master --' else 'Custom'})", item_opts, key=f"sel_it_inv_{i}")
-                
-                # MAGIC TRACKER - ITEMS
                 trk_key = f"trk_it_inv_{i}"
                 if trk_key not in st.session_state: st.session_state[trk_key] = sel_it
                 if st.session_state[trk_key] != sel_it:
@@ -559,21 +595,23 @@ else:
             if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
                 keys_to_clear = ["form_data", "form_items", "mode", "sel_chal_p"]
                 for k in list(st.session_state.keys()):
-                    if k in keys_to_clear or k.startswith("trk_"): st.session_state.pop(k, None)
+                    if k in keys_to_clear or k.startswith("trk_") or k.startswith("pos_") or k.startswith("d_sup_"): st.session_state.pop(k, None)
                 st.session_state.item_count = 1; st.rerun()
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ EDITING existing challan.")
             
+            # Auto Generate Challan No and Date/Time System
+            def_chal_no = fd.get('challan_no', get_next_auto_no('challans', 'challan_no', safe_name)) if mode == "INSERT" else fd.get('challan_no','')
+            def_date_time = datetime.datetime.now().strftime("%d/%m/%Y %I:%M %p")
+
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Dispatch To Party Details:**")
                 party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-                
                 sel_p = st.selectbox("Autofill Party Details", party_names, key="sel_chal_p")
                 
-                # MAGIC TRACKER - PARTY (CHALLAN)
                 if "trk_p_chal" not in st.session_state: st.session_state["trk_p_chal"] = sel_p
                 if st.session_state["trk_p_chal"] != sel_p:
                     st.session_state["trk_p_chal"] = sel_p
@@ -585,27 +623,30 @@ else:
                             st.session_state["p_gst"] = pm['gstin']
                             st.session_state["p_state"] = pm['state']
                             st.session_state["p_scode"] = pm['state_code']
+                            st.session_state["pos_chal"] = pm.get('place_of_supply', '')
                             
                 party_name = st.text_input("Dispatch To (Party Name)", value=fd.get('party_name',''), key="p_name")
                 party_address = st.text_area("Party Address", value=fd.get('party_address',''), key="p_add")
                 party_gstin = st.text_input("Party GSTIN", value=fd.get('party_gstin',''), key="p_gst")
-                party_state = st.text_input("Party State", value=fd.get('party_state',''), key="p_state")
-                party_state_code = st.text_input("Party State Code", value=fd.get('party_state_code',''), key="p_scode")
+                
+                c_st1, c_st2, c_st3 = st.columns(3)
+                with c_st1: party_state = st.text_input("Party State", value=fd.get('party_state',''), key="p_state")
+                with c_st2: party_state_code = st.text_input("State Code", value=fd.get('party_state_code',''), key="p_scode")
+                with c_st3: place_of_supply = st.text_input("Place of Supply", value=fd.get('place_of_supply', ''), key="pos_chal")
+                
             with col2:
                 st.markdown("**Challan Details:**")
-                challan_no = st.text_input("Challan No.", value=fd.get('challan_no', ''), key="c_no")
+                challan_no = st.text_input("Challan No.", value=def_chal_no, key="c_no")
                 vehicle_no = st.text_input("Vehicle No.", value=fd.get('vehicle_no', ''), key="v_no")
-                date_of_supply = st.date_input("Date of Supply", parse_date(fd.get('date_of_supply')), key="d_sup")
                 challan_date = st.date_input("Challan Date", parse_date(fd.get('challan_date')), key="c_date")
                 transport_mode = st.text_input("Transport Mode", value=fd.get('transport_mode', 'Road'), key="t_mode")
-                place_of_supply = st.text_input("Place of Supply", value=fd.get('place_of_supply', ''), key="p_sup")
+                
+                # Default Date & Time
+                date_of_supply = st.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time), key="d_sup_chal")
 
             st.subheader("📦 Item Details")
-            
-            if sel_p != "-- Select Party from Master --":
-                items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
-            else:
-                items_db = []
+            if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
+            else: items_db = []
                 
             item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
 
@@ -614,14 +655,11 @@ else:
             if c_btn2.button("➖ Remove Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
             items_data = []
-            
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
+                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_{i}")
                 
-                sel_it = st.selectbox(f"Autofill Item {i+1} (Filtered for {sel_p if sel_p != '-- Select Party from Master --' else 'Custom'})", item_opts, key=f"sel_it_chal_{i}")
-                
-                # MAGIC TRACKER - ITEM (CHALLAN)
                 trk_key = f"trk_it_chal_{i}"
                 if trk_key not in st.session_state: st.session_state[trk_key] = sel_it
                 if st.session_state[trk_key] != sel_it:
@@ -646,8 +684,9 @@ else:
                 total_tax = (total_before * 0.09) + (total_before * 0.09)
                 total_after = total_before + total_tax
                 amt_words = num2words(total_after, lang='en_IN').title() + " Only."
-                if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply.strftime('%d/%m/%Y'), transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
-                else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply.strftime('%d/%m/%Y'), transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
+                
+                if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
+                else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
                 
                 items_html = ""
                 for idx, item in enumerate(items_data):
@@ -684,7 +723,7 @@ else:
                                     <table style="border:none; width: 100%;">
                                         <tr><td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td><td style="border:none; border-left: 1px solid #aeb6bf; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td></tr>
                                         <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td></tr>
-                                        <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply.strftime('%d/%m/%Y')}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
+                                        <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
                                     </table>
                                 </td>
                             </tr>
