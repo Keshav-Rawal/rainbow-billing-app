@@ -347,7 +347,6 @@ else:
                         linked_party = st.selectbox("Select Party for this Item *", saved_parties)
                         idsc = st.text_input("Item Description *")
                         ihsn = st.text_input("HSN Code")
-                        # --- NAYA RATE FIELD YAHAN AAYA HAI ---
                         irate = st.number_input("Default Rate (₹)", min_value=0.0, step=1.0)
                         
                         if st.form_submit_button("Save Item for this Party"):
@@ -367,7 +366,7 @@ else:
                                 st.rerun()
 
         elif menu == "📜 History":
-            st.title("📜 Document History")
+            st.title("📜 Document History & Analytics")
             view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
@@ -376,13 +375,34 @@ else:
                 sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_chal")
 
                 if sel_history_p == "All Parties":
-                    data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                    data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND party_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
                 
                 if data:
-                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**"); st.markdown("---")
-                    for c in data:
+                    # --- NEW ANALYTICS SECTION ---
+                    df = pd.DataFrame(data)
+                    df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
+                    df['date_obj'] = pd.to_datetime(df['challan_date'], format='%d/%m/%Y', errors='coerce')
+                    
+                    st.markdown(f"### 📈 {sel_history_p} Analytics")
+                    c1, c2 = st.columns(2)
+                    c1.metric("🧾 Total Challans Issued", f"{len(df)}")
+                    c2.metric("💰 Total Value of Challans", f"₹ {df['clean_amt'].sum():,.2f}")
+                    
+                    valid_dates = df.dropna(subset=['date_obj']).copy()
+                    if not valid_dates.empty:
+                        valid_dates['month_str'] = valid_dates['date_obj'].dt.strftime('%b %Y')
+                        valid_dates['sort_key'] = valid_dates['date_obj'].dt.strftime('%Y-%m')
+                        grouped = valid_dates.groupby(['sort_key', 'month_str'])['clean_amt'].sum().reset_index().sort_values('sort_key')
+                        chart_data = grouped.set_index('month_str')['clean_amt']
+                        st.bar_chart(chart_data)
+                    
+                    st.markdown("---")
+                    st.write("**Recent Challan Records:**")
+
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
+                    for c in data[:50]: # Show only last 50 in table for speed
                         c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
                         c1.write(c['challan_date']); c2.write(c['challan_no']); c3.write(c['party_name']); c4.write(c['amount'])
                         if c5_edit.button("✏️", key=f"ec_{c['id']}"):
@@ -396,13 +416,34 @@ else:
                 sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_inv")
 
                 if sel_history_p == "All Parties":
-                    data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC LIMIT 50", (safe_name,))
+                    data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND bill_to_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
                 
                 if data:
-                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**"); st.markdown("---")
-                    for c in data:
+                    # --- NEW ANALYTICS SECTION ---
+                    df = pd.DataFrame(data)
+                    df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
+                    df['date_obj'] = pd.to_datetime(df['invoice_date'], format='%d/%m/%Y', errors='coerce')
+                    
+                    st.markdown(f"### 📈 {sel_history_p} Analytics")
+                    c1, c2 = st.columns(2)
+                    c1.metric("🧾 Total Tax Invoices", f"{len(df)}")
+                    c2.metric("💰 Total Billing Amount", f"₹ {df['clean_amt'].sum():,.2f}")
+                    
+                    valid_dates = df.dropna(subset=['date_obj']).copy()
+                    if not valid_dates.empty:
+                        valid_dates['month_str'] = valid_dates['date_obj'].dt.strftime('%b %Y')
+                        valid_dates['sort_key'] = valid_dates['date_obj'].dt.strftime('%Y-%m')
+                        grouped = valid_dates.groupby(['sort_key', 'month_str'])['clean_amt'].sum().reset_index().sort_values('sort_key')
+                        chart_data = grouped.set_index('month_str')['clean_amt']
+                        st.bar_chart(chart_data)
+                        
+                    st.markdown("---")
+                    st.write("**Recent Invoice Records:**")
+
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
+                    for c in data[:50]: # Show only last 50 in table for speed
                         c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
                         c1.write(c['invoice_date']); c2.write(c['invoice_no']); c3.write(c['bill_to_name']); c4.write(c['amount'])
                         if c5_edit.button("✏️", key=f"ei_{c['id']}"):
@@ -546,7 +587,6 @@ else:
             if col_btn1.button("➕ Add Item"): st.session_state.item_count += 1; st.rerun()
             if col_btn2.button("➖ Remove Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
-            # --- RATE AUTOFILL ADDED ---
             def autofill_inv_item(index, db):
                 sel = st.session_state[f"sel_it_inv_widget_{index}"]
                 if sel != "-- Custom Item --":
@@ -714,7 +754,6 @@ else:
             if c_btn1.button("➕ Add Item", key="add_item"): st.session_state.item_count += 1; st.rerun()
             if c_btn2.button("➖ Remove Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
-            # --- RATE AUTOFILL ADDED ---
             def autofill_chal_item(index, db):
                 sel = st.session_state[f"sel_it_chal_widget_{index}"]
                 if sel != "-- Custom Item --":
