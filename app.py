@@ -42,11 +42,13 @@ def init_db():
             """)
             
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100))")
-            cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN place_of_supply VARCHAR(100)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE item_master ADD COLUMN rate FLOAT DEFAULT 0.0"); conn.commit()
             except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
@@ -98,9 +100,7 @@ def get_next_auto_no(table_name, col_name, created_by):
         return val + "-1"
     return "1"
 
-# === TIMEZONE HELPER ===
 def get_ist_time():
-    # UTC time mein 5 ghante 30 minute add karna (IST)
     ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
@@ -347,18 +347,21 @@ else:
                         linked_party = st.selectbox("Select Party for this Item *", saved_parties)
                         idsc = st.text_input("Item Description *")
                         ihsn = st.text_input("HSN Code")
+                        # --- NAYA RATE FIELD YAHAN AAYA HAI ---
+                        irate = st.number_input("Default Rate (₹)", min_value=0.0, step=1.0)
+                        
                         if st.form_submit_button("Save Item for this Party"):
                             if idsc:
-                                execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code) VALUES (%s, %s, %s, %s)", (uid, linked_party, idsc, ihsn))
+                                execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code, rate) VALUES (%s, %s, %s, %s, %s)", (uid, linked_party, idsc, ihsn, irate))
                                 st.success(f"Item saved specifically for {linked_party}!")
                             else: st.error("Item Description is required!")
                 
-                saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code FROM item_master WHERE uid=%s", (uid,))
+                saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code, rate FROM item_master WHERE uid=%s", (uid,))
                 if saved_items:
                     with st.expander("🗑️ View / Delete Saved Items"):
                         for itm in saved_items:
                             col_a, col_b = st.columns([4, 1])
-                            col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']})")
+                            col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']} | Rate: ₹{itm.get('rate', 0.0)})")
                             if col_b.button("Del", key=f"del_it_{itm['id']}"):
                                 execute_data("DELETE FROM item_master WHERE id=%s", (itm['id'],))
                                 st.rerun()
@@ -543,6 +546,7 @@ else:
             if col_btn1.button("➕ Add Item"): st.session_state.item_count += 1; st.rerun()
             if col_btn2.button("➖ Remove Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
+            # --- RATE AUTOFILL ADDED ---
             def autofill_inv_item(index, db):
                 sel = st.session_state[f"sel_it_inv_widget_{index}"]
                 if sel != "-- Custom Item --":
@@ -550,6 +554,7 @@ else:
                     if im:
                         st.session_state[f"id_{index}"] = im['item_description']
                         st.session_state[f"ih_{index}"] = im['hsn_code']
+                        st.session_state[f"ir_{index}"] = float(im.get('rate', 0.0))
 
             items_data = []
             for i in range(st.session_state.item_count):
@@ -570,7 +575,7 @@ else:
                 with c2: hsn = st.text_input("HSN Code", key=f"ih_{i}")
                 with c3: boxes = st.text_input("Boxes", key=f"ib_{i}")
                 with c4: qty = st.number_input("Qty", min_value=0.0, key=f"iq_{i}")
-                with c5: rate = st.number_input("Rate", min_value=0.0, key=f"ir_{i}")
+                with c5: rate = st.number_input("Rate (₹)", min_value=0.0, key=f"ir_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
@@ -709,6 +714,7 @@ else:
             if c_btn1.button("➕ Add Item", key="add_item"): st.session_state.item_count += 1; st.rerun()
             if c_btn2.button("➖ Remove Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
+            # --- RATE AUTOFILL ADDED ---
             def autofill_chal_item(index, db):
                 sel = st.session_state[f"sel_it_chal_widget_{index}"]
                 if sel != "-- Custom Item --":
@@ -716,6 +722,7 @@ else:
                     if im:
                         st.session_state[f"desc_{index}"] = im['item_description']
                         st.session_state[f"hsn_{index}"] = im['hsn_code']
+                        st.session_state[f"rate_{index}"] = float(im.get('rate', 0.0))
 
             items_data = []
             for i in range(st.session_state.item_count):
@@ -736,7 +743,7 @@ else:
                 with c2: hsn = st.text_input("HSN Code", key=f"hsn_{i}")
                 with c3: boxes = st.text_input("Boxes", key=f"box_{i}")
                 with c4: qty = st.number_input("Qty", min_value=0.0, key=f"qty_{i}")
-                with c5: rate = st.number_input("Rate", min_value=0.0, key=f"rate_{i}")
+                with c5: rate = st.number_input("Rate (₹)", min_value=0.0, key=f"rate_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
