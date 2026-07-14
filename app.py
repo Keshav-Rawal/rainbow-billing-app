@@ -380,7 +380,6 @@ else:
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND party_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
                 
                 if data:
-                    # --- NEW ANALYTICS SECTION ---
                     df = pd.DataFrame(data)
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['challan_date'], format='%d/%m/%Y', errors='coerce')
@@ -402,7 +401,7 @@ else:
                     st.write("**Recent Challan Records:**")
 
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
-                    for c in data[:50]: # Show only last 50 in table for speed
+                    for c in data[:50]:
                         c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
                         c1.write(c['challan_date']); c2.write(c['challan_no']); c3.write(c['party_name']); c4.write(c['amount'])
                         if c5_edit.button("✏️", key=f"ec_{c['id']}"):
@@ -421,7 +420,6 @@ else:
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND bill_to_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
                 
                 if data:
-                    # --- NEW ANALYTICS SECTION ---
                     df = pd.DataFrame(data)
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['invoice_date'], format='%d/%m/%Y', errors='coerce')
@@ -443,7 +441,7 @@ else:
                     st.write("**Recent Invoice Records:**")
 
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
-                    for c in data[:50]: # Show only last 50 in table for speed
+                    for c in data[:50]:
                         c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
                         c1.write(c['invoice_date']); c2.write(c['invoice_no']); c3.write(c['bill_to_name']); c4.write(c['amount'])
                         if c5_edit.button("✏️", key=f"ei_{c['id']}"):
@@ -455,20 +453,33 @@ else:
         elif menu == "🗑️ Recycle Bin":
             st.title("🗑️ Recycle Bin")
             view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            
             if view_type == "Delivery Challans":
                 data = fetch_data("SELECT id, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
+                    if st.button("🚨 Empty Entire Challan Bin", type="primary"):
+                        execute_data("DELETE FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
+                        st.rerun()
+                    st.markdown("---")
                     for c in data:
-                        c1, c2, c3, c4 = st.columns([2,3,2,2])
+                        c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['challan_no']); c2.write(c['party_name']); c3.write(c['amount'])
                         if c4.button("🔄 Restore", key=f"rc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5.button("❌ Delete", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Challan Recycle Bin is clean! ✨")
             else:
                 data = fetch_data("SELECT id, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
+                    if st.button("🚨 Empty Entire Invoice Bin", type="primary"):
+                        execute_data("DELETE FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
+                        st.rerun()
+                    st.markdown("---")
                     for c in data:
-                        c1, c2, c3, c4 = st.columns([2,3,2,2])
+                        c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['invoice_no']); c2.write(c['bill_to_name']); c3.write(c['amount'])
                         if c4.button("🔄 Restore", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5.button("❌ Delete", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Tax Invoice Recycle Bin is clean! ✨")
 
         # ==========================================
         # TAX INVOICE ENGINE
