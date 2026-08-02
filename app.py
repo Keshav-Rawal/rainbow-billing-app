@@ -31,6 +31,7 @@ def init_db():
         try:
             conn = get_connection(); cursor = conn.cursor()
             
+            # Existing Tables
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
             cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
@@ -43,6 +44,11 @@ def init_db():
             
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
+
+            # New Tables for Inventory and Purchase
+            cursor.execute("CREATE TABLE IF NOT EXISTS vendors (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), vendor_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS purchase_bills (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), bill_date VARCHAR(20), bill_no VARCHAR(50), vendor_name VARCHAR(100), items_data TEXT, total_amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS stock_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), item_name VARCHAR(255), hsn_code VARCHAR(20), current_stock FLOAT DEFAULT 0.0)")
 
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
             except: pass
@@ -267,7 +273,8 @@ else:
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
+        # UPDATE: Naye features ke options menu mein daal diye hain!
+        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📥 Purchase (Incoming)", "📊 Live Inventory", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Client Dashboard")
@@ -633,11 +640,17 @@ else:
             tax_type = st.radio("Tax Calculation:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
             tax_mode = "IGST" if "IGST" in tax_type else "CGST"
 
+            # UPDATE: WhatsApp Button Invoices Ke Liye Lagaya
             if 'pdf_comp' in st.session_state:
                 st.success("✅ Invoice Generated & Saved!")
-                c_dl1, c_dl2 = st.columns(2)
+                c_dl1, c_dl2, c_wa = st.columns([2, 2, 1.5])
                 c_dl1.download_button("📄 Download Company Copies (3 Pages)", data=st.session_state['pdf_comp'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_Company.pdf", mime="application/pdf", type="primary")
                 c_dl2.download_button("📁 Download Office Copy (1 Page)", data=st.session_state['pdf_off'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_OfficeCopy.pdf", mime="application/pdf")
+                
+                # Magic WhatsApp Link Generator
+                wa_msg = f"Hello {st.session_state.get('b1', 'Sir/Madam')},%0A%0AHere are your billing details from *{my_company['name']}*:%0A*Invoice No:* {st.session_state['inv_no']}%0A*Amount:* {st.session_state.get('inv_amt', '')}%0A%0AThank you for your business!"
+                wa_link = f"https://wa.me/?text={wa_msg}"
+                c_wa.link_button("📲 Send on WhatsApp", wa_link)
             else:
                 if st.button("🚀 Save & Generate Invoice PDF", type="primary"):
                     total_before = sum(item['amount'] for item in items_data)
@@ -663,7 +676,6 @@ else:
                     if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
                     else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
-                    # NAYA CSS HEIGHT (260px) JO FULL PAGE COVER KAREGA
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
                     html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
@@ -676,6 +688,7 @@ else:
                     st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
                     st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
                     st.session_state['inv_no'] = invoice_no
+                    st.session_state['inv_amt'] = f"₹{total_after:.2f}"
                     st.rerun()
 
         # ==========================================
@@ -812,7 +825,6 @@ else:
                     qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
                     items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
 
-                # NAYA CSS HEIGHT (260px) JO FULL PAGE COVER KAREGA
                 html_content = f"""
                 <!DOCTYPE html><html><head><style>
                 @page {{ size: A4; margin: 10mm 5mm; }} 
@@ -864,4 +876,25 @@ else:
                 </body></html>"""
                 
                 pdf_c = HTML(string=html_content).write_pdf()
-                st.download_button(label="📄 Download Ready PDF", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf")
+                
+                # UPDATE: WhatsApp Button Challan Ke Liye
+                st.success("✅ Challan Saved Successfully!")
+                c_dl, c_wa = st.columns([2, 2])
+                c_dl.download_button(label="📄 Download Ready PDF", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
+                
+                # Magic WhatsApp Link
+                wa_msg = f"Hello {party_name},%0A%0AHere are your dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Amount:* ₹{total_after:.2f}%0A%0AThank you!"
+                wa_link = f"https://wa.me/?text={wa_msg}"
+                c_wa.link_button("📲 Send on WhatsApp", wa_link)
+
+        # ==========================================
+        # PHASE 2 PREP: PURCHASES & INVENTORY
+        # ==========================================
+        elif menu == "📥 Purchase (Incoming)":
+            st.title("📥 Purchase Bills (Raw Material Entry)")
+            st.info("🚧 Bhai, yeh feature under construction hai. Yahan par aap plastic dana aur dusre raw materials ki entry karenge, jo seedha Live Inventory mein '+' (add) ho jayega.")
+            # Hum isko agle step mein banayenge!
+
+        elif menu == "📊 Live Inventory":
+            st.title("📊 Live Stock & Inventory")
+            st.info("🚧 Yahan aapko ek live dashboard milega jisme aap dekh payenge ki factory mein abhi kitna raw material aur ready maal pada hai.")
