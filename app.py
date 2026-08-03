@@ -119,20 +119,6 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
-# 2. SESSION & AUTH MANAGER
-# ==========================================
-cookie_manager = stx.CookieManager(key="cookie_manager")
-time.sleep(0.1)
-
-if "auth_logged_in" not in st.session_state:
-    try: 
-        if cookie_manager.get(cookie="rainbow_erp_auth") == "verified":
-            st.session_state.update({"auth_logged_in": True, "auth_role": cookie_manager.get(cookie="rainbow_user_role"), "auth_name": cookie_manager.get(cookie="rainbow_user_name"), "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")})
-    except: st.session_state.auth_logged_in = False
-
-if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
-
-# ==========================================
 # 3. HTML GENERATOR FOR TAX INVOICE
 # ==========================================
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
@@ -387,12 +373,11 @@ else:
         # ==========================================
         elif menu == "📐 3D Part Viewer":
             st.title("📐 Pro 3D CAD Viewer & Weight Calculator")
-            st.write("Apni CAD file (.stl, .obj) upload karein, Material select karein aur exact weight janein!")
+            st.write("Ab **.STEP, .STP, .STL,** aur **.OBJ** files direct upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx` install hona chahiye.")
+                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx gmsh` install hona chahiye.")
             else:
-                # Material Density Dictionary (g/cm³)
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
                     "ABS Plastic": 1.04,
@@ -402,36 +387,47 @@ else:
                     "Nylon": 1.15,
                 }
 
-                col_mat, _ = st.columns([1, 2])
+                col_mat, col_slider = st.columns([1, 1])
                 with col_mat:
                     selected_material = st.selectbox("Select Material for Calculation", list(MATERIALS.keys()))
+                with col_slider:
+                    margin_pct = st.slider("⚙️ Factory Machining / Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Actual factory weight nikalne ke liye machining tolerance ya scrap waste ka margin add karein.")
 
-                uploaded_file = st.file_uploader("Upload a 3D File (.stl, .obj ONLY)", type=['stl', 'obj'])
+                uploaded_file = st.file_uploader("Upload a 3D File (.step, .stp, .stl, .obj)", type=['step', 'stp', 'stl', 'obj'])
                 
                 if uploaded_file is not None:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.name.split('.')[-1]) as tmp:
+                    file_extension = uploaded_file.name.split('.')[-1].lower()
+                    with tempfile.NamedTemporaryFile(delete=False, suffix="." + file_extension) as tmp:
                         tmp.write(uploaded_file.getvalue())
                         tmp_path = tmp.name
                     
                     try:
-                        with st.spinner("Analyzing 3D Mesh..."):
+                        with st.spinner("Analyzing CAD & 3D Mesh... Please wait (STEP files take longer)"):
+                            # Trimesh can use gmsh automatically in the background for step/stp files
                             mesh = trimesh.load(tmp_path)
+                            
+                            # Standard calculations
                             vol_mm3 = mesh.volume
                             area_mm2 = mesh.area
                             bbox = mesh.bounding_box.extents
                             
                             vol_cm3 = vol_mm3 * 0.001
                             density = MATERIALS[selected_material]
-                            est_weight = vol_cm3 * density
+                            
+                            # Weight calculations
+                            theoretical_weight = vol_cm3 * density
+                            practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
                             st.success(f"✅ Part Loaded Successfully: {uploaded_file.name}")
                             
-                            st.subheader("📊 Part Details")
+                            st.subheader("📊 Part Details & Weights")
                             m1, m2, m3, m4 = st.columns(4)
                             m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
                             m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
-                            m3.metric("Volume", f"{vol_cm3:,.2f} cm³")
-                            m4.metric(f"Weight ({selected_material})", f"{est_weight:,.2f} Grams")
+                            m3.metric("Theoretical Weight", f"{theoretical_weight:,.2f} g")
+                            
+                            # Emphasizing practical weight
+                            m4.metric(f"🛠️ Practical Weight (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
                             
                             st.markdown("---")
                             st.subheader("🔍 Interactive 3D View")
@@ -463,7 +459,7 @@ else:
                             st.plotly_chart(fig, use_container_width=True)
                             
                     except Exception as e:
-                        st.error(f"Error loading 3D File: {e}")
+                        st.error(f"Error loading 3D File: {e}. Please ensure 'gmsh' is installed in your Docker container for STEP files.")
                     finally:
                         os.remove(tmp_path)
 
