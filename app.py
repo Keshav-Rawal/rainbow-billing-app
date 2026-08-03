@@ -119,6 +119,20 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
+# 2. SESSION & AUTH MANAGER
+# ==========================================
+cookie_manager = stx.CookieManager(key="cookie_manager")
+time.sleep(0.1)
+
+if "auth_logged_in" not in st.session_state:
+    try: 
+        if cookie_manager.get(cookie="rainbow_erp_auth") == "verified":
+            st.session_state.update({"auth_logged_in": True, "auth_role": cookie_manager.get(cookie="rainbow_user_role"), "auth_name": cookie_manager.get(cookie="rainbow_user_name"), "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")})
+    except: st.session_state.auth_logged_in = False
+
+if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
+
+# ==========================================
 # 3. HTML GENERATOR FOR TAX INVOICE
 # ==========================================
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
@@ -376,7 +390,7 @@ else:
             st.write("Ab **.STEP, .STP, .STL,** aur **.OBJ** files direct upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx gmsh` install hona chahiye.")
+                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx gmsh cascadio` install hona chahiye.")
             else:
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
@@ -403,9 +417,16 @@ else:
                     
                     try:
                         with st.spinner("Analyzing CAD & 3D Mesh... Please wait (STEP files take longer)"):
-                            # Trimesh can use gmsh automatically in the background for step/stp files
-                            mesh = trimesh.load(tmp_path)
+                            # File load karna
+                            loaded_mesh = trimesh.load(tmp_path)
                             
+                            # 👇 YAHAN HAI NAYA JADOO (SCENE FIX) 👇
+                            # Agar STEP file 'Scene' (assembly) ban kar aayi hai, toh usko single Mesh mein jod do
+                            if isinstance(loaded_mesh, trimesh.Scene):
+                                mesh = trimesh.util.concatenate(loaded_mesh.dump())
+                            else:
+                                mesh = loaded_mesh
+                                
                             # Standard calculations
                             vol_mm3 = mesh.volume
                             area_mm2 = mesh.area
@@ -459,7 +480,7 @@ else:
                             st.plotly_chart(fig, use_container_width=True)
                             
                     except Exception as e:
-                        st.error(f"Error loading 3D File: {e}. Please ensure 'gmsh' is installed in your Docker container for STEP files.")
+                        st.error(f"Error loading 3D File: {e}. Please ensure 'gmsh' and 'cascadio' are installed.")
                     finally:
                         os.remove(tmp_path)
 

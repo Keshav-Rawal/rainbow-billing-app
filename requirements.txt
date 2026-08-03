@@ -1,11 +1,12 @@
 streamlit
 extra-streamlit-components
 weasyprint
-num2words
 pandas
 mysql-connector-python
+num2words
 trimesh
 plotly
 scipy
 networkx
 gmsh
+cascadio
