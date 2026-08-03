@@ -11,6 +11,7 @@ import uuid
 import re
 import tempfile
 import os
+import numpy as np
 
 # 3D Libraries Load Check
 try:
@@ -420,22 +421,40 @@ else:
                             # File load karna
                             loaded_mesh = trimesh.load(tmp_path)
                             
-                            # 👇 YAHAN HAI NAYA JADOO (SCENE FIX) 👇
-                            # Agar STEP file 'Scene' (assembly) ban kar aayi hai, toh usko single Mesh mein jod do
+                            # 👇 100% BULLETPROOF SCENE (ASSEMBLY) FIX 👇
                             if isinstance(loaded_mesh, trimesh.Scene):
-                                mesh = trimesh.util.concatenate(loaded_mesh.dump())
-                            else:
-                                mesh = loaded_mesh
+                                # Assembly ke saare tukdon ko ek list mein nikalna
+                                mesh_list = [g for g in loaded_mesh.geometry.values() if hasattr(g, 'vertices')]
                                 
-                            # Standard calculations
-                            vol_mm3 = mesh.volume
-                            area_mm2 = mesh.area
-                            bbox = mesh.bounding_box.extents
-                            
+                                if not mesh_list:
+                                    raise Exception("Is STEP file mein koi solid part nahi mila.")
+                                
+                                # Sab tukdon ka total volume aur area jodna
+                                vol_mm3 = sum(m.volume for m in mesh_list if hasattr(m, 'volume'))
+                                area_mm2 = sum(m.area for m in mesh_list if hasattr(m, 'area'))
+                                bbox = loaded_mesh.extents # Poori assembly ka outer box
+                                
+                                # 3D Render ke liye saare tukdon ke coordinates (vertices/faces) chipkana
+                                all_v, all_f = [], []
+                                offset = 0
+                                for m in mesh_list:
+                                    all_v.append(m.vertices)
+                                    all_f.append(m.faces + offset)
+                                    offset += len(m.vertices)
+                                    
+                                vertices = np.vstack(all_v)
+                                faces = np.vstack(all_f)
+                            else:
+                                # Agar pehle se single part hai
+                                vol_mm3 = loaded_mesh.volume
+                                area_mm2 = loaded_mesh.area
+                                bbox = loaded_mesh.bounding_box.extents
+                                vertices = loaded_mesh.vertices
+                                faces = loaded_mesh.faces
+                                
+                            # Convert & Weight calculations
                             vol_cm3 = vol_mm3 * 0.001
                             density = MATERIALS[selected_material]
-                            
-                            # Weight calculations
                             theoretical_weight = vol_cm3 * density
                             practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
@@ -452,9 +471,6 @@ else:
                             
                             st.markdown("---")
                             st.subheader("🔍 Interactive 3D View")
-                            
-                            vertices = mesh.vertices
-                            faces = mesh.faces
                             
                             mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
 
