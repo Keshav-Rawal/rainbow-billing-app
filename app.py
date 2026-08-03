@@ -11,7 +11,6 @@ import uuid
 import re
 import tempfile
 import os
-import numpy as np
 
 # 3D Libraries Load Check
 try:
@@ -388,10 +387,10 @@ else:
         # ==========================================
         elif menu == "📐 3D Part Viewer":
             st.title("📐 Pro 3D CAD Viewer & Weight Calculator")
-            st.write("Ab **.STEP, .STP, .STL,** aur **.OBJ** files direct upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
+            st.write("Ab **.STL aur .OBJ** files upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx gmsh cascadio numpy` install hona chahiye.")
+                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx` install hona chahiye.")
             else:
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
@@ -408,7 +407,8 @@ else:
                 with col_slider:
                     margin_pct = st.slider("⚙️ Factory Machining / Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Actual factory weight nikalne ke liye machining tolerance ya scrap waste ka margin add karein.")
 
-                uploaded_file = st.file_uploader("Upload a 3D File (.step, .stp, .stl, .obj)", type=['step', 'stp', 'stl', 'obj'])
+                # SIRF STL aur OBJ ALLOWED HAI AB
+                uploaded_file = st.file_uploader("Upload a 3D File (.stl, .obj)", type=['stl', 'obj'])
                 
                 if uploaded_file is not None:
                     file_extension = uploaded_file.name.split('.')[-1].lower()
@@ -417,51 +417,21 @@ else:
                         tmp_path = tmp.name
                     
                     try:
-                        with st.spinner("Analyzing CAD & 3D Mesh... Please wait (STEP files take longer)"):
-                            # File load karna
-                            loaded_mesh = trimesh.load(tmp_path)
+                        with st.spinner("Analyzing 3D Mesh... Please wait"):
+                            # Simple STL load, No scene complexity
+                            mesh = trimesh.load(tmp_path)
                             
-                            # 👇 100% BULLETPROOF SCENE (ASSEMBLY) FIX 👇
-                            if isinstance(loaded_mesh, trimesh.Scene):
-                                # Sirf solid 3D meshes nikalenge (2D lines/paths ko ignore karenge)
-                                mesh_list = [g for g in loaded_mesh.geometry.values() if isinstance(g, trimesh.Trimesh)]
-                                
-                                if not mesh_list:
-                                    raise Exception("Is STEP file mein koi solid 3D part nahi mila (sirf surface/lines hain).")
-                                
-                                # Sab tukdon ka volume 'absolute' (hamesha positive) karke jodenge
-                                vol_mm3 = sum(abs(m.volume) for m in mesh_list if getattr(m, 'volume', None) is not None)
-                                area_mm2 = sum(getattr(m, 'area', 0.0) for m in mesh_list)
-                                bbox = loaded_mesh.extents 
-                                
-                                all_v, all_f = [], []
-                                offset = 0
-                                for m in mesh_list:
-                                    all_v.append(m.vertices)
-                                    all_f.append(m.faces + offset)
-                                    offset += len(m.vertices)
-                                    
-                                vertices = np.vstack(all_v) if all_v else np.array([])
-                                faces = np.vstack(all_f) if all_f else np.array([])
-                            else:
-                                mesh = loaded_mesh
-                                vol_v = getattr(mesh, 'volume', 0.0)
-                                vol_mm3 = abs(vol_v) if vol_v is not None else 0.0
-                                area_mm2 = getattr(mesh, 'area', 0.0)
-                                bbox = mesh.bounding_box.extents
-                                vertices = mesh.vertices
-                                faces = mesh.faces
-                                
-                            # Convert & Weight calculations
+                            vol_mm3 = mesh.volume
+                            area_mm2 = mesh.area
+                            bbox = mesh.bounding_box.extents
+                            
                             vol_cm3 = vol_mm3 * 0.001
                             density = MATERIALS[selected_material]
+                            
                             theoretical_weight = vol_cm3 * density
                             practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
                             st.success(f"✅ Part Loaded Successfully: {uploaded_file.name}")
-                            
-                            if vol_mm3 == 0.0:
-                                st.warning("⚠️ ALARM: Is 3D file ka mathematical volume 0 aa raha hai! Designer ne isko 'Solid' ki jagah 'Surface Model' ke roop mein save kiya hai. Ise solid banakar dobara STL/STEP export karwayein.")
                             
                             st.subheader("📊 Part Details & Weights")
                             m1, m2, m3, m4 = st.columns(4)
@@ -469,40 +439,39 @@ else:
                             m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
                             m3.metric("Theoretical Weight", f"{theoretical_weight:,.2f} g")
                             
-                            # Emphasizing practical weight
                             m4.metric(f"🛠️ Practical Weight (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
                             
                             st.markdown("---")
                             st.subheader("🔍 Interactive 3D View")
                             
+                            vertices = mesh.vertices
+                            faces = mesh.faces
+                            
                             mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
 
-                            if len(vertices) > 0 and len(faces) > 0:
-                                fig = go.Figure(data=[
-                                    go.Mesh3d(
-                                        x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
-                                        i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                                        color=mesh_color, opacity=0.85,
-                                        lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
-                                    )
-                                ])
-                                
-                                fig.update_layout(
-                                    scene=dict(
-                                        aspectmode='data',
-                                        xaxis=dict(visible=False),
-                                        yaxis=dict(visible=False),
-                                        zaxis=dict(visible=False)
-                                    ),
-                                    margin=dict(l=0, r=0, b=0, t=0),
-                                    height=550
+                            fig = go.Figure(data=[
+                                go.Mesh3d(
+                                    x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
+                                    i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                                    color=mesh_color, opacity=0.85,
+                                    lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
                                 )
-                                st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.error("Kuch technical problem aayi, 3D Plot render nahi ho paya.")
+                            ])
+                            
+                            fig.update_layout(
+                                scene=dict(
+                                    aspectmode='data',
+                                    xaxis=dict(visible=False),
+                                    yaxis=dict(visible=False),
+                                    zaxis=dict(visible=False)
+                                ),
+                                margin=dict(l=0, r=0, b=0, t=0),
+                                height=550
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
                             
                     except Exception as e:
-                        st.error(f"Error loading 3D File: {e}. Please ensure 'gmsh' and 'cascadio' are installed.")
+                        st.error(f"Error loading 3D File: {e}. Kripya ensure karein ki aapne sahi STL/OBJ file daali hai.")
                     finally:
                         os.remove(tmp_path)
 
