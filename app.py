@@ -391,7 +391,7 @@ else:
             st.write("Ab **.STEP, .STP, .STL,** aur **.OBJ** files direct upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx gmsh cascadio` install hona chahiye.")
+                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx gmsh cascadio numpy` install hona chahiye.")
             else:
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
@@ -423,18 +423,17 @@ else:
                             
                             # 👇 100% BULLETPROOF SCENE (ASSEMBLY) FIX 👇
                             if isinstance(loaded_mesh, trimesh.Scene):
-                                # Assembly ke saare tukdon ko ek list mein nikalna
-                                mesh_list = [g for g in loaded_mesh.geometry.values() if hasattr(g, 'vertices')]
+                                # Sirf solid 3D meshes nikalenge (2D lines/paths ko ignore karenge)
+                                mesh_list = [g for g in loaded_mesh.geometry.values() if isinstance(g, trimesh.Trimesh)]
                                 
                                 if not mesh_list:
-                                    raise Exception("Is STEP file mein koi solid part nahi mila.")
+                                    raise Exception("Is STEP file mein koi solid 3D part nahi mila (sirf surface/lines hain).")
                                 
-                                # Sab tukdon ka total volume aur area jodna
-                                vol_mm3 = sum(m.volume for m in mesh_list if hasattr(m, 'volume'))
-                                area_mm2 = sum(m.area for m in mesh_list if hasattr(m, 'area'))
-                                bbox = loaded_mesh.extents # Poori assembly ka outer box
+                                # Sab tukdon ka volume 'absolute' (hamesha positive) karke jodenge
+                                vol_mm3 = sum(abs(m.volume) for m in mesh_list if getattr(m, 'volume', None) is not None)
+                                area_mm2 = sum(getattr(m, 'area', 0.0) for m in mesh_list)
+                                bbox = loaded_mesh.extents 
                                 
-                                # 3D Render ke liye saare tukdon ke coordinates (vertices/faces) chipkana
                                 all_v, all_f = [], []
                                 offset = 0
                                 for m in mesh_list:
@@ -442,15 +441,16 @@ else:
                                     all_f.append(m.faces + offset)
                                     offset += len(m.vertices)
                                     
-                                vertices = np.vstack(all_v)
-                                faces = np.vstack(all_f)
+                                vertices = np.vstack(all_v) if all_v else np.array([])
+                                faces = np.vstack(all_f) if all_f else np.array([])
                             else:
-                                # Agar pehle se single part hai
-                                vol_mm3 = loaded_mesh.volume
-                                area_mm2 = loaded_mesh.area
-                                bbox = loaded_mesh.bounding_box.extents
-                                vertices = loaded_mesh.vertices
-                                faces = loaded_mesh.faces
+                                mesh = loaded_mesh
+                                vol_v = getattr(mesh, 'volume', 0.0)
+                                vol_mm3 = abs(vol_v) if vol_v is not None else 0.0
+                                area_mm2 = getattr(mesh, 'area', 0.0)
+                                bbox = mesh.bounding_box.extents
+                                vertices = mesh.vertices
+                                faces = mesh.faces
                                 
                             # Convert & Weight calculations
                             vol_cm3 = vol_mm3 * 0.001
@@ -459,6 +459,9 @@ else:
                             practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
                             st.success(f"✅ Part Loaded Successfully: {uploaded_file.name}")
+                            
+                            if vol_mm3 == 0.0:
+                                st.warning("⚠️ ALARM: Is 3D file ka mathematical volume 0 aa raha hai! Designer ne isko 'Solid' ki jagah 'Surface Model' ke roop mein save kiya hai. Ise solid banakar dobara STL/STEP export karwayein.")
                             
                             st.subheader("📊 Part Details & Weights")
                             m1, m2, m3, m4 = st.columns(4)
@@ -474,26 +477,29 @@ else:
                             
                             mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
 
-                            fig = go.Figure(data=[
-                                go.Mesh3d(
-                                    x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
-                                    i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                                    color=mesh_color, opacity=0.85,
-                                    lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
+                            if len(vertices) > 0 and len(faces) > 0:
+                                fig = go.Figure(data=[
+                                    go.Mesh3d(
+                                        x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
+                                        i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                                        color=mesh_color, opacity=0.85,
+                                        lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
+                                    )
+                                ])
+                                
+                                fig.update_layout(
+                                    scene=dict(
+                                        aspectmode='data',
+                                        xaxis=dict(visible=False),
+                                        yaxis=dict(visible=False),
+                                        zaxis=dict(visible=False)
+                                    ),
+                                    margin=dict(l=0, r=0, b=0, t=0),
+                                    height=550
                                 )
-                            ])
-                            
-                            fig.update_layout(
-                                scene=dict(
-                                    aspectmode='data',
-                                    xaxis=dict(visible=False),
-                                    yaxis=dict(visible=False),
-                                    zaxis=dict(visible=False)
-                                ),
-                                margin=dict(l=0, r=0, b=0, t=0),
-                                height=550
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.error("Kuch technical problem aayi, 3D Plot render nahi ho paya.")
                             
                     except Exception as e:
                         st.error(f"Error loading 3D File: {e}. Please ensure 'gmsh' and 'cascadio' are installed.")
