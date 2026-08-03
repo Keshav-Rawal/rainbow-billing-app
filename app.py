@@ -9,6 +9,16 @@ import mysql.connector
 import json
 import uuid
 import re
+import tempfile
+import os
+
+# 3D Libraries Load Check
+try:
+    import trimesh
+    import plotly.graph_objects as go
+    HAS_3D = True
+except ImportError:
+    HAS_3D = False
 
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
@@ -31,30 +41,28 @@ def init_db():
         try:
             conn = get_connection(); cursor = conn.cursor()
             
-            # Existing Tables
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
-            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), eway_bill_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
             
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tax_invoices (
-                    id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), invoice_date VARCHAR(20), invoice_no VARCHAR(50), vendor_code VARCHAR(50), po_no VARCHAR(50), po_date VARCHAR(20), bill_to_name VARCHAR(100), bill_to_address TEXT, bill_to_gstin VARCHAR(50), bill_to_state VARCHAR(50), bill_to_state_code VARCHAR(20), ship_to_name VARCHAR(100), ship_to_address TEXT, ship_to_gstin VARCHAR(50), ship_to_state VARCHAR(50), ship_to_state_code VARCHAR(20), transport_mode VARCHAR(50), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL
+                    id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), invoice_date VARCHAR(20), invoice_no VARCHAR(50), eway_bill_no VARCHAR(50), vendor_code VARCHAR(50), po_no VARCHAR(50), po_date VARCHAR(20), bill_to_name VARCHAR(100), bill_to_address TEXT, bill_to_gstin VARCHAR(50), bill_to_state VARCHAR(50), bill_to_state_code VARCHAR(20), ship_to_name VARCHAR(100), ship_to_address TEXT, ship_to_gstin VARCHAR(50), ship_to_state VARCHAR(50), ship_to_state_code VARCHAR(20), transport_mode VARCHAR(50), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL
                 )
             """)
             
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
-            # New Tables for Inventory and Purchase
-            cursor.execute("CREATE TABLE IF NOT EXISTS vendors (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), vendor_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10))")
-            cursor.execute("CREATE TABLE IF NOT EXISTS purchase_bills (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), bill_date VARCHAR(20), bill_no VARCHAR(50), vendor_name VARCHAR(100), items_data TEXT, total_amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
-            cursor.execute("CREATE TABLE IF NOT EXISTS stock_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), item_name VARCHAR(255), hsn_code VARCHAR(20), current_stock FLOAT DEFAULT 0.0)")
-
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN place_of_supply VARCHAR(100)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN rate FLOAT DEFAULT 0.0"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE tax_invoices ADD COLUMN eway_bill_no VARCHAR(50)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE challans ADD COLUMN eway_bill_no VARCHAR(50)"); conn.commit()
             except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
@@ -139,6 +147,8 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     else:
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>{sgst:.2f}</td></tr>"
         
+    eway_html = f"<tr><td style='border:none; padding:4px;'><strong>E-Way Bill No.</strong></td><td style='border:none; padding:4px;'>: <strong>{fd.get('eway_bill_no','')}</strong></td></tr>" if fd.get('eway_bill_no') else ""
+
     return f"""
     <div class="page-container">
         <div class="top-label">{copy_title}</div>
@@ -159,6 +169,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                         <table style="border:none; width:100%;">
                             <tr><td style="border:none; padding:4px;"><strong>Invoice No.</strong></td><td style="border:none; padding:4px;">: <strong>{fd.get('invoice_no','')}</strong></td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Invoice Date</strong></td><td style="border:none; padding:4px;">: {fd.get('invoice_date','')}</td></tr>
+                            {eway_html}
                             <tr><td style="border:none; padding:4px;"><strong>Vendor Code</strong></td><td style="border:none; padding:4px;">: {fd.get('vendor_code','')}</td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>P. O. No.</strong></td><td style="border:none; padding:4px;">: {fd.get('po_no','')}</td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>P. O. Date</strong></td><td style="border:none; padding:4px;">: {fd.get('po_date','')}</td></tr>
@@ -273,8 +284,7 @@ else:
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        # UPDATE: Naye features ke options menu mein daal diye hain!
-        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📥 Purchase (Incoming)", "📊 Live Inventory", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
+        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Client Dashboard")
@@ -371,6 +381,73 @@ else:
                             if col_b.button("Del", key=f"del_it_{itm['id']}"):
                                 execute_data("DELETE FROM item_master WHERE id=%s", (itm['id'],))
                                 st.rerun()
+
+        # ==========================================
+        # 3D DRAWING VIEWER & MEASUREMENT MODULE
+        # ==========================================
+        elif menu == "📐 3D Part Viewer":
+            st.title("📐 3D CAD Viewer & Plastic Weight Calculator")
+            st.write("Apne client ya tool-room ki 3D Drawing upload karke dimensions aur plastic dana weight calculate karein.")
+            
+            if not HAS_3D:
+                st.error("⚠️ 3D Libraries missing! Install karein: `pip install trimesh plotly scipy networkx`")
+            else:
+                uploaded_file = st.file_uploader("Upload 3D CAD File (.stl, .obj)", type=['stl', 'obj'])
+                
+                if uploaded_file is not None:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.name.split('.')[-1]) as tmp:
+                        tmp.write(uploaded_file.getvalue())
+                        tmp_path = tmp.name
+                    
+                    try:
+                        with st.spinner("Analyzing 3D Mesh..."):
+                            mesh = trimesh.load(tmp_path)
+                            vol_mm3 = mesh.volume
+                            area_mm2 = mesh.area
+                            bbox = mesh.bounding_box.extents
+                            
+                            vol_cm3 = vol_mm3 * 0.001
+                            density_pp = 0.9 # Grams per cm3 (PP Plastic)
+                            est_weight = vol_cm3 * density_pp
+                            
+                            st.success(f"✅ Part Loaded: {uploaded_file.name}")
+                            
+                            m1, m2, m3, m4 = st.columns(4)
+                            m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
+                            m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
+                            m3.metric("Volume", f"{vol_cm3:,.2f} cm³")
+                            m4.metric("Est. Weight (PP Plastic)", f"{est_weight:,.2f} Grams")
+                            
+                            st.markdown("---")
+                            
+                            vertices = mesh.vertices
+                            faces = mesh.faces
+                            
+                            fig = go.Figure(data=[
+                                go.Mesh3d(
+                                    x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
+                                    i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                                    color='#1a4f8b', opacity=0.85,
+                                    lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
+                                )
+                            ])
+                            
+                            fig.update_layout(
+                                scene=dict(
+                                    aspectmode='data',
+                                    xaxis=dict(visible=False),
+                                    yaxis=dict(visible=False),
+                                    zaxis=dict(visible=False)
+                                ),
+                                margin=dict(l=0, r=0, b=0, t=0),
+                                height=550
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                    except Exception as e:
+                        st.error(f"Error loading 3D File: {e}")
+                    finally:
+                        os.remove(tmp_path)
 
         elif menu == "📜 History":
             st.title("📜 Document History & Analytics")
@@ -530,9 +607,10 @@ else:
                 st.session_state.pos_inv = fd.get('place_of_supply', '')
 
             with st.expander("📌 Invoice & Transport Details", expanded=True):
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5_ew = st.columns([2, 2, 2, 2, 2])
                 invoice_no = c1.text_input("Invoice No.", value=def_inv_no)
                 invoice_date = c2.date_input("Invoice Date", parse_date(fd.get('invoice_date')))
+                eway_bill_no = c5_ew.text_input("E-Way Bill No. (Optional)", fd.get('eway_bill_no',''))
                 vendor_code = c3.text_input("Vendor Code", fd.get('vendor_code',''))
                 po_no = c4.text_input("P.O. No.", fd.get('po_no',''))
                 
@@ -640,14 +718,12 @@ else:
             tax_type = st.radio("Tax Calculation:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
             tax_mode = "IGST" if "IGST" in tax_type else "CGST"
 
-            # UPDATE: WhatsApp Button Invoices Ke Liye Lagaya
             if 'pdf_comp' in st.session_state:
                 st.success("✅ Invoice Generated & Saved!")
                 c_dl1, c_dl2, c_wa = st.columns([2, 2, 1.5])
                 c_dl1.download_button("📄 Download Company Copies (3 Pages)", data=st.session_state['pdf_comp'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_Company.pdf", mime="application/pdf", type="primary")
                 c_dl2.download_button("📁 Download Office Copy (1 Page)", data=st.session_state['pdf_off'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_OfficeCopy.pdf", mime="application/pdf")
                 
-                # Magic WhatsApp Link Generator
                 wa_msg = f"Hello {st.session_state.get('b1', 'Sir/Madam')},%0A%0AHere are your billing details from *{my_company['name']}*:%0A*Invoice No:* {st.session_state['inv_no']}%0A*Amount:* {st.session_state.get('inv_amt', '')}%0A%0AThank you for your business!"
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Send on WhatsApp", wa_link)
@@ -663,7 +739,7 @@ else:
                     items_json = json.dumps(items_data)
 
                     current_fd = {
-                        'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'),
+                        'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'), 'eway_bill_no': eway_bill_no,
                         'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
                         'transport_mode': transport_mode, 'vehicle_no': vehicle_no,
                         'date_of_supply': date_of_supply, 'place_of_supply': place_of_supply,
@@ -673,8 +749,8 @@ else:
                         'ship_to_state': s_state, 'ship_to_state_code': s_scode
                     }
 
-                    if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
-                    else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
+                    if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
+                    else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
@@ -764,6 +840,7 @@ else:
             with col2:
                 st.markdown("**Challan Details:**")
                 challan_no = st.text_input("Challan No.", value=def_chal_no, key="c_no")
+                eway_bill_no = st.text_input("E-Way Bill No. (Optional)", value=fd.get('eway_bill_no',''), key="ew_no")
                 vehicle_no = st.text_input("Vehicle No.", value=fd.get('vehicle_no', ''), key="v_no")
                 challan_date = st.date_input("Challan Date", parse_date(fd.get('challan_date')), key="c_date")
                 transport_mode = st.text_input("Transport Mode", value=fd.get('transport_mode', 'Road'), key="t_mode")
@@ -817,13 +894,15 @@ else:
                 total_after = total_before + total_tax
                 amt_words = num2words(total_after, lang='en_IN').title() + " Only."
                 
-                if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
-                else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
+                if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
+                else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, eway_bill_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
                 
                 items_html = ""
                 for idx, item in enumerate(items_data):
                     qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
                     items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
+
+                eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
 
                 html_content = f"""
                 <!DOCTYPE html><html><head><style>
@@ -856,6 +935,7 @@ else:
                                         <tr><td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td><td style="border:none; border-left: 1px solid #aeb6bf; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td></tr>
                                         <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td></tr>
                                         <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
+                                        {eway_row}
                                     </table>
                                 </td>
                             </tr>
@@ -877,24 +957,10 @@ else:
                 
                 pdf_c = HTML(string=html_content).write_pdf()
                 
-                # UPDATE: WhatsApp Button Challan Ke Liye
                 st.success("✅ Challan Saved Successfully!")
                 c_dl, c_wa = st.columns([2, 2])
                 c_dl.download_button(label="📄 Download Ready PDF", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
                 
-                # Magic WhatsApp Link
                 wa_msg = f"Hello {party_name},%0A%0AHere are your dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Amount:* ₹{total_after:.2f}%0A%0AThank you!"
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Send on WhatsApp", wa_link)
-
-        # ==========================================
-        # PHASE 2 PREP: PURCHASES & INVENTORY
-        # ==========================================
-        elif menu == "📥 Purchase (Incoming)":
-            st.title("📥 Purchase Bills (Raw Material Entry)")
-            st.info("🚧 Bhai, yeh feature under construction hai. Yahan par aap plastic dana aur dusre raw materials ki entry karenge, jo seedha Live Inventory mein '+' (add) ho jayega.")
-            # Hum isko agle step mein banayenge!
-
-        elif menu == "📊 Live Inventory":
-            st.title("📊 Live Stock & Inventory")
-            st.info("🚧 Yahan aapko ek live dashboard milega jisme aap dekh payenge ki factory mein abhi kitna raw material aur ready maal pada hai.")
