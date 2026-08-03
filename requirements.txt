@@ -4,3 +4,7 @@ weasyprint
 num2words
 pandas
 mysql-connector-python
+trimesh
+plotly
+scipy
+networkx

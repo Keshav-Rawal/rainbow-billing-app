@@ -386,13 +386,27 @@ else:
         # 3D DRAWING VIEWER & MEASUREMENT MODULE
         # ==========================================
         elif menu == "📐 3D Part Viewer":
-            st.title("📐 3D CAD Viewer & Plastic Weight Calculator")
-            st.write("Apne client ya tool-room ki 3D Drawing upload karke dimensions aur plastic dana weight calculate karein.")
+            st.title("📐 Pro 3D CAD Viewer & Weight Calculator")
+            st.write("Apni CAD file (.stl, .obj) upload karein, Material select karein aur exact weight janein!")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Install karein: `pip install trimesh plotly scipy networkx`")
+                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx` install hona chahiye.")
             else:
-                uploaded_file = st.file_uploader("Upload 3D CAD File (.stl, .obj)", type=['stl', 'obj'])
+                # Material Density Dictionary (g/cm³)
+                MATERIALS = {
+                    "PP Plastic (Polypropylene)": 0.90,
+                    "ABS Plastic": 1.04,
+                    "Aluminium": 2.70,
+                    "SS304 (Stainless Steel)": 7.93,
+                    "Copper": 8.96,
+                    "Nylon": 1.15,
+                }
+
+                col_mat, _ = st.columns([1, 2])
+                with col_mat:
+                    selected_material = st.selectbox("Select Material for Calculation", list(MATERIALS.keys()))
+
+                uploaded_file = st.file_uploader("Upload a 3D File (.stl, .obj ONLY)", type=['stl', 'obj'])
                 
                 if uploaded_file is not None:
                     with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.name.split('.')[-1]) as tmp:
@@ -407,27 +421,31 @@ else:
                             bbox = mesh.bounding_box.extents
                             
                             vol_cm3 = vol_mm3 * 0.001
-                            density_pp = 0.9 # Grams per cm3 (PP Plastic)
-                            est_weight = vol_cm3 * density_pp
+                            density = MATERIALS[selected_material]
+                            est_weight = vol_cm3 * density
                             
-                            st.success(f"✅ Part Loaded: {uploaded_file.name}")
+                            st.success(f"✅ Part Loaded Successfully: {uploaded_file.name}")
                             
+                            st.subheader("📊 Part Details")
                             m1, m2, m3, m4 = st.columns(4)
                             m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
                             m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
                             m3.metric("Volume", f"{vol_cm3:,.2f} cm³")
-                            m4.metric("Est. Weight (PP Plastic)", f"{est_weight:,.2f} Grams")
+                            m4.metric(f"Weight ({selected_material})", f"{est_weight:,.2f} Grams")
                             
                             st.markdown("---")
+                            st.subheader("🔍 Interactive 3D View")
                             
                             vertices = mesh.vertices
                             faces = mesh.faces
                             
+                            mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
+
                             fig = go.Figure(data=[
                                 go.Mesh3d(
                                     x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
                                     i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                                    color='#1a4f8b', opacity=0.85,
+                                    color=mesh_color, opacity=0.85,
                                     lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
                                 )
                             ])
