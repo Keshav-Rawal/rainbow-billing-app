@@ -20,6 +20,13 @@ try:
 except ImportError:
     HAS_3D = False
 
+# AI Library Load Check
+try:
+    import google.generativeai as genai
+    HAS_AI = True
+except ImportError:
+    HAS_AI = False
+
 st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
 
 # ==========================================
@@ -284,7 +291,8 @@ else:
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile"], key="cust_menu")
+        # YAHAN MENU MEIN AI ASSISTANT ADD KIYA HAI
+        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Client Dashboard")
@@ -407,7 +415,6 @@ else:
                 with col_slider:
                     margin_pct = st.slider("⚙️ Factory Machining / Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Actual factory weight nikalne ke liye machining tolerance ya scrap waste ka margin add karein.")
 
-                # SIRF STL aur OBJ ALLOWED HAI AB
                 uploaded_file = st.file_uploader("Upload a 3D File (.stl, .obj)", type=['stl', 'obj'])
                 
                 if uploaded_file is not None:
@@ -418,7 +425,6 @@ else:
                     
                     try:
                         with st.spinner("Analyzing 3D Mesh... Please wait"):
-                            # Simple STL load, No scene complexity
                             mesh = trimesh.load(tmp_path)
                             
                             vol_mm3 = mesh.volume
@@ -474,6 +480,85 @@ else:
                         st.error(f"Error loading 3D File: {e}. Kripya ensure karein ki aapne sahi STL/OBJ file daali hai.")
                     finally:
                         os.remove(tmp_path)
+
+        # ==========================================
+        # AI ASSISTANT MODULE (NEW PHASE 3)
+        # ==========================================
+        elif menu == "🤖 AI Assistant":
+            st.title("🤖 Rainbow AI Assistant")
+            st.write("Aapke ERP ka smart helper! Puchiye app kaise use karna hai, kaise bill banana hai, ya koi bhi dusra sawal.")
+            st.markdown("---")
+
+            if not HAS_AI:
+                st.error("⚠️ AI Library missing! Backend me `pip install google-generativeai` install karein.")
+            else:
+                # API Key Input
+                if "gemini_api_key" not in st.session_state:
+                    st.session_state.gemini_api_key = ""
+                
+                if not st.session_state.gemini_api_key:
+                    st.info("💡 AI chalane ke liye ek free Google Gemini API key ki zaroorat hai. (Google AI Studio se mil jayegi)")
+                    api_input = st.text_input("Enter Gemini API Key:", type="password")
+                    if st.button("Save Key & Start AI"):
+                        st.session_state.gemini_api_key = api_input
+                        st.rerun()
+                else:
+                    try:
+                        genai.configure(api_key=st.session_state.gemini_api_key)
+                        
+                        # THE SECRET SYSTEM PROMPT (Brain of our AI)
+                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart aur helpful assistant ho. 
+                        Tumhara kaam staff ko ERP use karna sikhana hai. 
+                        ERP me yeh 5 main features hain:
+                        1. Dashboard: Yahan se direct kisi bhi party ka bill/challan bana sakte hain.
+                        2. Add Master Data: Yahan naye client ka naam, GST aur uske specific items save hote hain.
+                        3. Tax Invoice & Delivery Challan: Master data se autofill karke bill banate hain. IGST/CGST automatically calculate hota hai.
+                        4. 3D Part Viewer: Factory waale .STL file upload karke plastic part (PP, ABS) ka exact weight aur factory margin nikal sakte hain.
+                        5. History: Purane bills dekhne ke liye.
+                        
+                        Tumhe humesha friendly, professional aur 'Hinglish' (Hindi + English) bhasha mein chote aur clear points mein jawab dena hai. Jawab mein zaroorat padne par emojis ka use karein. Kabhi bhi code ya programming ki baatein na karein, sirf user/staff ki madad karein."""
+
+                        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=sys_prompt)
+
+                        # Chat History setup
+                        if "chat_history" not in st.session_state:
+                            st.session_state.chat_history = []
+                            # Initial greeting
+                            st.session_state.chat_history.append({"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]})
+
+                        # Show previous chat messages
+                        for msg in st.session_state.chat_history:
+                            with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+                                st.markdown(msg["parts"][0])
+
+                        # Chat input field
+                        prompt = st.chat_input("Puchiye, jaise 'Naya Invoice kaise banau?'")
+                        
+                        if prompt:
+                            # Save user message
+                            st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
+                            with st.chat_message("user"):
+                                st.markdown(prompt)
+                                
+                            # Get AI response
+                            with st.chat_message("assistant"):
+                                with st.spinner("AI Soch raha hai..."):
+                                    # Passing previous conversation history so it remembers context
+                                    chat = model.start_chat(history=st.session_state.chat_history[:-1])
+                                    response = chat.send_message(prompt)
+                                    st.markdown(response.text)
+                                    # Save AI response
+                                    st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
+                                    
+                        if st.button("🗑️ Clear Chat History"):
+                            st.session_state.chat_history = []
+                            st.rerun()
+
+                    except Exception as e:
+                        st.error("❌ API Key shayad galat hai ya internet issue hai. Check karke dobara try karein.")
+                        if st.button("Change API Key"):
+                            st.session_state.gemini_api_key = ""
+                            st.rerun()
 
         elif menu == "📜 History":
             st.title("📜 Document History & Analytics")
