@@ -27,7 +27,94 @@ try:
 except ImportError:
     HAS_AI = False
 
-st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
+# -----------------------------------------------------
+# 🌟 WORLD-CLASS UI SETUP (GLASSMORPHISM & 3D NEON)
+# -----------------------------------------------------
+st.set_page_config(page_title="Rainbow ERP - Pro SaaS", page_icon="🏭", layout="wide")
+
+custom_css = """
+<style>
+/* 1. Main Background Gradient (Deep Industrial Cyberpunk Theme) */
+.stApp {
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    color: #e0e0e0 !important;
+}
+
+/* 2. Glassmorphism Sidebar */
+[data-testid="stSidebar"] {
+    background: rgba(15, 32, 39, 0.85) !important;
+    backdrop-filter: blur(15px);
+    border-right: 1px solid rgba(0, 210, 255, 0.2);
+}
+
+/* 3. 3D Glowing Hover Effect for Sidebar Menu & Buttons */
+div.stButton > button {
+    background: linear-gradient(90deg, #1CB5E0 0%, #000851 100%);
+    color: white !important;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 10px 20px;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: all 0.3s ease-in-out;
+}
+div.stButton > button:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(28, 181, 224, 0.6);
+    border-color: #1CB5E0;
+}
+
+/* 4. Beautiful Glass Cards for Metrics & Containers */
+div[data-testid="metric-container"], .css-1r6slb0, div[data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, border-color 0.3s ease;
+}
+div[data-testid="metric-container"]:hover {
+    transform: translateY(-5px);
+    border-color: #00d2ff !important;
+    box-shadow: 0 10px 30px rgba(0, 210, 255, 0.2);
+}
+
+/* 5. Typography (Neon Accents) */
+h1, h2, h3 {
+    color: #00d2ff !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-shadow: 1px 1px 10px rgba(0, 210, 255, 0.2);
+}
+p, span, label, div {
+    color: #f1f2f6 !important;
+}
+
+/* 6. Form Inputs Styling (Dark Glass) */
+.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    color: #00d2ff !important;
+    border: 1px solid rgba(0, 210, 255, 0.3) !important;
+    border-radius: 8px !important;
+}
+.stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus {
+    box-shadow: 0 0 10px rgba(0, 210, 255, 0.5) !important;
+}
+
+/* Fix for internal expander content visibility */
+.streamlit-expanderContent {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+::-webkit-scrollbar-thumb { background: #1CB5E0; border-radius: 10px; }
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
 
 # ==========================================
 # 1. SAFE DATABASE FUNCTIONS
@@ -140,19 +227,19 @@ if "auth_logged_in" not in st.session_state:
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
 # ==========================================
-# 3. HTML GENERATOR FOR TAX INVOICE
+# 3. HTML GENERATOR FOR TAX INVOICE (STAYS WHITE/CLEAR FOR PRINTING)
 # ==========================================
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
     for idx, item in enumerate(items):
         qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
-        items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item.get('hsn','')}</td><td style='text-align:center;'>{item.get('boxes','')}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
+        items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item.get('hsn','')}</td><td style='text-align:center; border: 1px solid #000;'>{item.get('boxes','')}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{item['rate']:.2f}</td><td style='text-align:right; border: 1px solid #000;'>{item['amount']:.2f}</td></tr>"
     
     tax_rows = ""
     if tax_type == "IGST":
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: IGST @ 18%</td><td style='text-align:right;'>{igst:.2f}</td></tr>"
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
     else:
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>{sgst:.2f}</td></tr>"
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
         
     eway_html = f"<tr><td style='border:none; padding:4px;'><strong>E-Way Bill No.</strong></td><td style='border:none; padding:4px;'>: <strong>{fd.get('eway_bill_no','')}</strong></td></tr>" if fd.get('eway_bill_no') else ""
 
@@ -161,19 +248,19 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
         <div class="top-label">{copy_title}</div>
         <div class="container">
             <div class="header">
-                <div class="header-left"><strong>GSTIN :</strong> {comp['gstin']}<br><strong>State :</strong> {comp['state']} &nbsp; <strong>Code :</strong> {comp['state_code']}</div>
-                <div class="header-right"><strong>M. No. :</strong> {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}</div>
-                <h2 style="margin: 0; font-size: 16px; text-decoration: underline;">TAX INVOICE</h2>
+                <div class="header-left" style="color:black;"><strong>GSTIN :</strong> {comp['gstin']}<br><strong>State :</strong> {comp['state']} &nbsp; <strong>Code :</strong> {comp['state_code']}</div>
+                <div class="header-right" style="color:black;"><strong>M. No. :</strong> {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}</div>
+                <h2 style="margin: 0; font-size: 16px; text-decoration: underline; color:black;">TAX INVOICE</h2>
                 <h1 style="color: #1a4f8b; font-size: 32px; font-weight: 900; margin: 10px 0 5px 0;">{comp['name']}</h1>
-                <p style="font-weight: bold; margin: 2px 0;">{comp['tagline']}</p>
-                <p style="margin: 2px 0;">{comp['address']}</p>
-                <p style="margin: 2px 0; font-weight: bold;">{comp['contact']}</p>
+                <p style="font-weight: bold; margin: 2px 0; color:black;">{comp['tagline']}</p>
+                <p style="margin: 2px 0; color:black;">{comp['address']}</p>
+                <p style="margin: 2px 0; font-weight: bold; color:black;">{comp['contact']}</p>
                 <p style="margin: 5px 0 0 0; font-weight: bold; font-style: italic; color: #1a4f8b;">{comp['manufacturing']}</p>
             </div>
-            <table class="info-table">
+            <table class="info-table" style="color:black;">
                 <tr>
-                    <td style="width: 50%;">
-                        <table style="border:none; width:100%;">
+                    <td style="width: 50%; border: 1px solid #000;">
+                        <table style="border:none; width:100%; color:black;">
                             <tr><td style="border:none; padding:4px;"><strong>Invoice No.</strong></td><td style="border:none; padding:4px;">: <strong>{fd.get('invoice_no','')}</strong></td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Invoice Date</strong></td><td style="border:none; padding:4px;">: {fd.get('invoice_date','')}</td></tr>
                             {eway_html}
@@ -182,8 +269,8 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                             <tr><td style="border:none; padding:4px;"><strong>P. O. Date</strong></td><td style="border:none; padding:4px;">: {fd.get('po_date','')}</td></tr>
                         </table>
                     </td>
-                    <td style="width: 50%;">
-                        <table style="border:none; width:100%;">
+                    <td style="width: 50%; border: 1px solid #000;">
+                        <table style="border:none; width:100%; color:black;">
                             <tr><td style="border:none; padding:4px;"><strong>Transportation Mode</strong></td><td style="border:none; padding:4px;">: {fd.get('transport_mode','Road')}</td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Vehicle Number</strong></td><td style="border:none; padding:4px;">: {fd.get('vehicle_no','')}</td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Date & Time of Supply</strong></td><td style="border:none; padding:4px;">: {fd.get('date_of_supply','')}</td></tr>
@@ -192,19 +279,19 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                     </td>
                 </tr>
             </table>
-            <table class="info-table" style="border-top: none;">
+            <table class="info-table" style="border-top: none; color:black;">
                 <tr>
-                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold;">Bill to Party :</td>
-                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold;">Details of Consignee / Shipped to :</td>
+                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">Bill to Party :</td>
+                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">Details of Consignee / Shipped to :</td>
                 </tr>
                 <tr>
-                    <td style="vertical-align: top;">
+                    <td style="vertical-align: top; border: 1px solid #000;">
                         <strong>Name :</strong> {fd.get('bill_to_name','')}<br>
                         <strong>Address :</strong> {fd.get('bill_to_address','').replace(chr(10), '<br>')}<br><br>
                         <strong>GSTIN :</strong> {fd.get('bill_to_gstin','')}<br>
                         <strong>State :</strong> {fd.get('bill_to_state','')} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code :</strong> {fd.get('bill_to_state_code','')}
                     </td>
-                    <td style="vertical-align: top;">
+                    <td style="vertical-align: top; border: 1px solid #000;">
                         <strong>Name :</strong> {fd.get('ship_to_name','')}<br>
                         <strong>Address :</strong> {fd.get('ship_to_address','').replace(chr(10), '<br>')}<br><br>
                         <strong>GSTIN :</strong> {fd.get('ship_to_gstin','')}<br>
@@ -212,25 +299,25 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                     </td>
                 </tr>
             </table>
-            <table class="items-table">
+            <table class="items-table" style="color:black;">
                 <tr>
-                    <th style="width:5%;">Sr.<br>No.</th><th style="width:40%;">Product Description</th><th style="width:10%;">HSN<br>Code</th><th style="width:10%;">No. & Description<br>of Package</th><th style="width:10%;">Qty.</th><th style="width:10%;">Rate</th><th style="width:15%;">Taxable Amount</th>
+                    <th style="width:5%; border: 1px solid #000;">Sr.<br>No.</th><th style="width:40%; border: 1px solid #000;">Product Description</th><th style="width:10%; border: 1px solid #000;">HSN<br>Code</th><th style="width:10%; border: 1px solid #000;">No. & Description<br>of Package</th><th style="width:10%; border: 1px solid #000;">Qty.</th><th style="width:10%; border: 1px solid #000;">Rate</th><th style="width:15%; border: 1px solid #000;">Taxable Amount</th>
                 </tr>
                 {items_html}
-                <tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr class="spacer-row"><td style="border: 1px solid #000; border-bottom: none; border-top:none; height: 260px;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td></tr>
             </table>
-            <table style="border-top: 2px solid #1c2d42; width: 100%; border-collapse: collapse;">
+            <table style="border-top: 2px solid #000; width: 100%; border-collapse: collapse; color:black;">
                 <tr>
-                    <td rowspan="5" style="width:65%; padding: 10px; border-right: 2px solid #1c2d42; vertical-align: top;">
+                    <td rowspan="5" style="width:65%; padding: 10px; border: 1px solid #000; vertical-align: top;">
                         <strong>Total Invoice Amount in Words :</strong><br><span style="font-style: italic; font-size: 13px;">{amt_words}</span>
                     </td>
-                    <td style="width:20%; text-align:right; font-weight:bold; padding: 4px;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border-left: 1px solid #1c2d42;">{total_before:.2f}</td>
+                    <td style="width:20%; text-align:right; font-weight:bold; padding: 4px; border: 1px solid #000;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border: 1px solid #000;">{total_before:.2f}</td>
                 </tr>
                 {tax_rows}
-                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border-left: 1px solid #1c2d42;">{total_tax:.2f}</td></tr>
-                <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border-bottom: 2px solid #1c2d42;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border-left: 1px solid #1c2d42; border-bottom: 2px solid #1c2d42;">{total_after:.2f}</td></tr>
+                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">{total_tax:.2f}</td></tr>
+                <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">{total_after:.2f}</td></tr>
             </table>
-            <div class="footer">
+            <div class="footer" style="color:black;">
                 <div style="float: left; width: 60%; font-size: 11px;"><strong>Terms:</strong><br>All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                 <div style="float: right; width: 40%; text-align: center;"><span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br><strong>For RAINBOW INDUSTRIES</strong><br><br><br><br><span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span></div>
                 <div style="clear: both;"></div>
@@ -243,15 +330,23 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
 # 4. APP SYSTEM & SCREENS
 # ==========================================
 if not st.session_state.get("auth_logged_in"):
-    st.title("☁️ SaaS Login")
-    u = st.text_input("User ID"); p = st.text_input("Password", type="password")
-    if st.button("Login"):
-        user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
-        if user:
-            st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
-            cookie_manager.set("rainbow_erp_auth", "verified"); cookie_manager.set("rainbow_user_role", user[0]['role']); cookie_manager.set("rainbow_user_name", user[0]['name']); cookie_manager.set("rainbow_user_uid", user[0]['uid'])
-            time.sleep(0.5); st.rerun()
-        else: st.error("❌ Invalid Credentials")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.markdown('''
+            <div style="background: rgba(0,0,0,0.5); padding: 40px; border-radius: 20px; text-align:center; box-shadow: 0 10px 30px rgba(0,210,255,0.2); border: 1px solid rgba(0,210,255,0.3);">
+                <h1 style="font-size:40px; text-shadow: 2px 2px 10px rgba(0,210,255,0.8);">🌈 RAINBOW ERP</h1>
+                <p style="color:#a0a0a0; font-style:italic;">Next-Gen SaaS Manufacturing Portal</p>
+            </div><br>
+        ''', unsafe_allow_html=True)
+        u = st.text_input("🛡️ Username (ID)"); p = st.text_input("🔑 Password", type="password")
+        if st.button("🚀 Secure Login", use_container_width=True):
+            user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
+            if user:
+                st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
+                cookie_manager.set("rainbow_erp_auth", "verified"); cookie_manager.set("rainbow_user_role", user[0]['role']); cookie_manager.set("rainbow_user_name", user[0]['name']); cookie_manager.set("rainbow_user_uid", user[0]['uid'])
+                time.sleep(0.5); st.rerun()
+            else: st.error("❌ Invalid Credentials")
 else:
     if not st.session_state.get('auth_role'):
         st.session_state['auth_logged_in'] = False
@@ -262,52 +357,66 @@ else:
     uid = st.session_state.auth_uid
     my_company = get_company_profile(uid)
     
-    st.sidebar.title("☁️ ERP System")
-    st.sidebar.write(f"**Welcome:** {safe_name}")
-    if st.sidebar.button("🔒 Logout"):
+    st.sidebar.markdown(f"<h2 style='text-align:center; border-bottom: 1px solid rgba(0,210,255,0.3); padding-bottom: 10px;'>🏭 RAINBOW ERP</h2>", unsafe_allow_html=True)
+    st.sidebar.markdown(f"<p style='text-align:center;'>Welcome back, <br><b style='color:#00d2ff; font-size:18px;'>{safe_name}</b></p>", unsafe_allow_html=True)
+    if st.sidebar.button("🔒 Secure Logout", use_container_width=True):
         for k in list(st.session_state.keys()):
             if k not in ["cookie_manager"]: st.session_state.pop(k, None)
         cookie_manager.delete("rainbow_erp_auth"); time.sleep(0.5); st.rerun()
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     
     if "redirect_menu" in st.session_state:
         st.session_state.cust_menu = st.session_state.redirect_menu
         del st.session_state.redirect_menu
 
     if role == "SUPERADMIN":
-        st.title("👑 Super Admin Dashboard")
+        st.title("👑 Super Admin Command Center")
         all_users = fetch_data("SELECT * FROM users")
         total_clients = sum(1 for u in all_users if u['role'] == 'customer')
-        m1, m2 = st.columns(2); m1.metric("Total Clients", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
+        m1, m2 = st.columns(2); m1.metric("Total Active Clients", str(total_clients)); m2.metric("Monthly SaaS Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
         with st.form("create_user_form", clear_on_submit=True):
             new_uid = st.text_input("Username / Login ID")
             new_pass = st.text_input("Password", type="password")
             new_fullname = st.text_input("Full Name / Factory Name")
             new_role_select = st.selectbox("Role", ["customer", "superadmin"])
-            if st.form_submit_button("🚀 Create Account Live"):
+            if st.form_submit_button("🚀 Create Live Account"):
                 if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
                     st.success("Account Created!"); time.sleep(0.5); st.rerun()
-        st.subheader("👥 Live User Database")
+        st.subheader("👥 Live User Matrix")
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        menu = st.sidebar.radio("Navigation Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
-            st.title("🏢 Client Dashboard")
-            st.write("Aapke saare permanent vendors aur clients yahan hain. Ek click mein unka specific Bill ya Challan banayein!")
-            st.markdown("---")
+            # GORGEOUS INDUSTRIAL BANNER
+            st.markdown('''
+                <div style="width: 100%; height: 280px; border-radius: 20px; background: url('https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop'); background-size: cover; background-position: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(0,210,255,0.3); border: 2px solid rgba(0,210,255,0.4); position:relative;">
+                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); border-radius:20px;"></div>
+                    <h1 style="color: #fff; text-shadow: 0px 4px 15px rgba(0, 210, 255, 1); font-size: 55px; z-index:2; margin:0; letter-spacing: 2px;">RAINBOW ERP</h1>
+                    <p style="color: #00d2ff; font-size: 20px; z-index:2; font-weight:bold; letter-spacing: 1px; text-transform: uppercase;">Smart Industrial Management</p>
+                </div>
+                <br><br>
+            ''', unsafe_allow_html=True)
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             
             if not parties_db:
                 st.info("Abhi tak koi Client add nahi kiya hai. Left menu se '📦 Add Master Data' mein jaakar apni pehli party add karein.")
             else:
+                st.markdown("<h3 style='text-align:center;'>🚀 Quick Access Client Matrix</h3><br>", unsafe_allow_html=True)
                 cols = st.columns(3)
                 for idx, p in enumerate(parties_db):
                     with cols[idx % 3]:
-                        st.markdown(f"#### 🏢 {p['party_name']}")
-                        st.caption(f"**State:** {p['state']} | **GST:** {p['gstin']}")
+                        # CUSTOM GLASS CARD FOR PARTIES
+                        st.markdown(f'''
+                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(0,210,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); text-align:center; backdrop-filter: blur(5px);">
+                            <h2 style="margin-top:0; font-size:22px;">🏢 {p['party_name']}</h2>
+                            <p style="color:#b0bec5 !important; font-size:14px; margin-bottom:15px;"><b>State:</b> {p['state']} | <b>GST:</b> {p['gstin']}</p>
+                        </div>
+                        <div style="height: 10px;"></div>
+                        ''', unsafe_allow_html=True)
                         
                         c_inv, c_chal = st.columns(2)
                         if c_inv.button("📄 Invoice", key=f"d_inv_{p['id']}", use_container_width=True):
@@ -325,10 +434,11 @@ else:
                             execute_data("DELETE FROM item_master WHERE party_name=%s AND uid=%s", (p['party_name'], uid)) 
                             st.rerun()
                         
-                        st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                        st.markdown("<br><br>", unsafe_allow_html=True)
 
         elif menu == "⚙️ Company Profile":
-            st.title("⚙️ Dynamic Company Profile")
+            st.title("⚙️ Global Profile Setup")
+            st.markdown("<p style='color:#a0a0a0;'>Apni factory/company ki exact details yahan daalein taaki sabhi bills par professionally print ho.</p>", unsafe_allow_html=True)
             c_name = st.text_input("Company/Factory Name", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
             c_gst = st.text_input("GSTIN Number", value=my_company["gstin"], key="c_gst")
@@ -337,16 +447,16 @@ else:
             c_scode = st.text_input("State Code", value=my_company["state_code"], key="c_scode")
             c_contact = st.text_input("Contact Lines", value=my_company.get("contact", ""), key="c_contact")
             c_manu = st.text_input("Business Scope", value=my_company.get("manufacturing", ""), key="c_manu")
-            if st.button("💾 Save Profile", type="primary"):
+            if st.button("💾 Sync Profile to Database", type="primary"):
                 execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu))
-                st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
+                st.success("Configuration Synced 100%!"); time.sleep(0.5); st.rerun()
             
         elif menu == "📦 Add Master Data":
-            st.title("📦 Master Data Management")
+            st.title("📦 Database Master Control")
             
             c1, c2 = st.columns(2)
             with c1:
-                st.subheader("👥 Add New Party")
+                st.subheader("👥 Register New Party")
                 with st.form("p_m", clear_on_submit=True):
                     pn = st.text_input("Party Name *")
                     pa = st.text_area("Address *")
@@ -354,50 +464,47 @@ else:
                     ps = st.text_input("State")
                     pc = st.text_input("State Code")
                     ppos = st.text_input("Place of Supply (City/State)")
-                    if st.form_submit_button("Save Party"):
+                    if st.form_submit_button("Inject Party to DB"):
                         if pn and pa:
                             execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
-                            st.success(f"Party '{pn}' Saved Successfully!")
-                        else: st.error("Name and Address are required!")
+                            st.success(f"Party '{pn}' Injected Successfully!")
+                        else: st.error("Name and Address are mandatory!")
 
             with c2:
-                st.subheader("📦 Add Items specific to a Party")
+                st.subheader("📦 Product & Rate Matrix")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
                 if not saved_parties:
-                    st.warning("⚠️ Pehle left side se Party add karein, fir uske items add kar payenge.")
+                    st.warning("⚠️ Action Locked: Please register a Party on the left first.")
                 else:
                     with st.form("i_m", clear_on_submit=True):
-                        linked_party = st.selectbox("Select Party for this Item *", saved_parties)
-                        idsc = st.text_input("Item Description *")
+                        linked_party = st.selectbox("Assign to Party *", saved_parties)
+                        idsc = st.text_input("Product Identifier/Name *")
                         ihsn = st.text_input("HSN Code")
-                        irate = st.number_input("Default Rate (₹)", min_value=0.0, step=1.0)
+                        irate = st.number_input("Standard Rate (₹)", min_value=0.0, step=1.0)
                         
-                        if st.form_submit_button("Save Item for this Party"):
+                        if st.form_submit_button("Link Item to Party"):
                             if idsc:
                                 execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code, rate) VALUES (%s, %s, %s, %s, %s)", (uid, linked_party, idsc, ihsn, irate))
-                                st.success(f"Item saved specifically for {linked_party}!")
-                            else: st.error("Item Description is required!")
+                                st.success(f"Item safely mapped to {linked_party}!")
+                            else: st.error("Product Identifier is mandatory!")
                 
                 saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code, rate FROM item_master WHERE uid=%s", (uid,))
                 if saved_items:
-                    with st.expander("🗑️ View / Delete Saved Items"):
+                    with st.expander("🗑️ View / Purge Item Matrix"):
                         for itm in saved_items:
                             col_a, col_b = st.columns([4, 1])
-                            col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']} | Rate: ₹{itm.get('rate', 0.0)})")
-                            if col_b.button("Del", key=f"del_it_{itm['id']}"):
+                            col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']} | ₹{itm.get('rate', 0.0)})")
+                            if col_b.button("Purge", key=f"del_it_{itm['id']}"):
                                 execute_data("DELETE FROM item_master WHERE id=%s", (itm['id'],))
                                 st.rerun()
 
-        # ==========================================
-        # 3D DRAWING VIEWER & MEASUREMENT MODULE
-        # ==========================================
         elif menu == "📐 3D Part Viewer":
-            st.title("📐 Pro 3D CAD Viewer & Weight Calculator")
-            st.write("Ab **.STL aur .OBJ** files upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
+            st.title("📐 Quantum 3D Viewer & Mass Estimator")
+            st.write("Upload **.STL or .OBJ** mesh geometry. Calculate exact mass matrices with programmable scrap margins.")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx` install hona chahiye.")
+                st.error("⚠️ 3D Render Engine offline! Ensure `trimesh`, `plotly`, `scipy`, `networkx` are active.")
             else:
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
@@ -410,11 +517,11 @@ else:
 
                 col_mat, col_slider = st.columns([1, 1])
                 with col_mat:
-                    selected_material = st.selectbox("Select Material for Calculation", list(MATERIALS.keys()))
+                    selected_material = st.selectbox("Material Density Profiler", list(MATERIALS.keys()))
                 with col_slider:
-                    margin_pct = st.slider("⚙️ Factory Machining / Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Actual factory weight nikalne ke liye machining tolerance ya scrap waste ka margin add karein.")
+                    margin_pct = st.slider("⚙️ Mechanical Shrinkage/Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5)
 
-                uploaded_file = st.file_uploader("Upload a 3D File (.stl, .obj)", type=['stl', 'obj'])
+                uploaded_file = st.file_uploader("Insert Geometry (.stl, .obj)", type=['stl', 'obj'])
                 
                 if uploaded_file is not None:
                     file_extension = uploaded_file.name.split('.')[-1].lower()
@@ -423,7 +530,7 @@ else:
                         tmp_path = tmp.name
                     
                     try:
-                        with st.spinner("Analyzing 3D Mesh... Please wait"):
+                        with st.spinner("Processing Mesh Vectors..."):
                             mesh = trimesh.load(tmp_path)
                             
                             vol_mm3 = mesh.volume
@@ -436,100 +543,87 @@ else:
                             theoretical_weight = vol_cm3 * density
                             practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
-                            st.success(f"✅ Part Loaded Successfully: {uploaded_file.name}")
+                            st.success(f"✅ Mesh Integrity Verified: {uploaded_file.name}")
                             
-                            st.subheader("📊 Part Details & Weights")
+                            st.subheader("📊 Output Matrices")
                             m1, m2, m3, m4 = st.columns(4)
-                            m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
-                            m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
-                            m3.metric("Theoretical Weight", f"{theoretical_weight:,.2f} g")
-                            
-                            m4.metric(f"🛠️ Practical Weight (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
+                            m1.metric("Bounding Box (mm)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f}")
+                            m2.metric("Surface Geometry", f"{area_mm2:,.0f} mm²")
+                            m3.metric("Base Mass", f"{theoretical_weight:,.2f} g")
+                            m4.metric(f"🛠️ Production Mass (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
                             
                             st.markdown("---")
-                            st.subheader("🔍 Interactive 3D View")
+                            st.subheader("🔍 Interactive Hologram")
                             
                             vertices = mesh.vertices
                             faces = mesh.faces
                             
-                            mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
+                            # Premium 3D Theme adjustment
+                            mesh_color = '#00d2ff' if "Aluminium" not in selected_material and "SS304" not in selected_material else '#silver'
 
                             fig = go.Figure(data=[
                                 go.Mesh3d(
                                     x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
                                     i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                                    color=mesh_color, opacity=0.85,
-                                    lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
+                                    color=mesh_color, opacity=0.9,
+                                    lighting=dict(ambient=0.4, diffuse=1, roughness=0.5, specular=0.8, fresnel=0.5)
                                 )
                             ])
                             
                             fig.update_layout(
                                 scene=dict(
                                     aspectmode='data',
-                                    xaxis=dict(visible=False),
-                                    yaxis=dict(visible=False),
-                                    zaxis=dict(visible=False)
+                                    xaxis=dict(visible=False, backgroundcolor="rgba(0,0,0,0)"),
+                                    yaxis=dict(visible=False, backgroundcolor="rgba(0,0,0,0)"),
+                                    zaxis=dict(visible=False, backgroundcolor="rgba(0,0,0,0)")
                                 ),
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                plot_bgcolor='rgba(0,0,0,0)',
                                 margin=dict(l=0, r=0, b=0, t=0),
                                 height=550
                             )
                             st.plotly_chart(fig, use_container_width=True)
                             
                     except Exception as e:
-                        st.error(f"Error loading 3D File: {e}. Kripya ensure karein ki aapne sahi STL/OBJ file daali hai.")
+                        st.error(f"Render Error: {e}. Check mesh geometry format.")
                     finally:
                         os.remove(tmp_path)
 
-        # ==========================================
-        # AI ASSISTANT MODULE (LATEST MODEL 2.5 FIX)
-        # ==========================================
         elif menu == "🤖 AI Assistant":
-            st.title("🤖 Rainbow AI Assistant")
-            st.write("Aapke ERP ka smart helper! Puchiye app kaise use karna hai, kaise bill banana hai, ya koi bhi dusra sawal.")
+            st.title("🤖 RAINBOW OMNI-AI")
+            st.write("Aapke ERP ka central brain. System queries ya manufacturing data ke liye interact karein.")
             st.markdown("---")
 
             if not HAS_AI:
-                st.error("⚠️ AI Library missing! Backend me `pip install google-generativeai` install karein.")
+                st.error("⚠️ AI Module Offline. Install `google-generativeai`.")
             else:
                 if "gemini_api_key" not in st.session_state:
                     st.session_state.gemini_api_key = ""
                 
                 if not st.session_state.gemini_api_key:
-                    st.info("💡 AI chalane ke liye ek free Google Gemini API key ki zaroorat hai. (Google AI Studio se mil jayegi)")
-                    api_input = st.text_input("Enter Gemini API Key:", type="password")
-                    if st.button("Save Key & Start AI"):
+                    st.info("💡 Link Gemini Neural API key to activate.")
+                    api_input = st.text_input("Enter API Key:", type="password")
+                    if st.button("Establish Neural Link"):
                         st.session_state.gemini_api_key = api_input
                         st.rerun()
                 else:
                     try:
                         genai.configure(api_key=st.session_state.gemini_api_key)
                         
-                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart aur helpful assistant ho. 
-                        Tumhara kaam staff ko ERP use karna sikhana hai. 
-                        ERP me yeh 5 main features hain:
-                        1. Dashboard: Yahan se direct kisi bhi party ka bill/challan bana sakte hain.
-                        2. Add Master Data: Yahan naye client ka naam, GST aur uske specific items save hote hain.
-                        3. Tax Invoice & Delivery Challan: Master data se autofill karke bill banate hain. IGST/CGST automatically calculate hota hai.
-                        4. 3D Part Viewer: Factory waale .STL file upload karke plastic part (PP, ABS) ka exact weight aur factory margin nikal sakte hain.
-                        5. History: Purane bills dekhne ke liye.
-                        
-                        Tumhe humesha friendly, professional aur 'Hinglish' (Hindi + English) bhasha mein chote aur clear points mein jawab dena hai. Jawab mein zaroorat padne par emojis ka use karein. Kabhi bhi code ya programming ki baatein na karein, sirf user/staff ki madad karein."""
+                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke smart assistant ho. 
+                        Tumhara kaam staff ko ERP use karna sikhana hai. Humesha Hinglish mein short/clear reply do."""
 
-                        # 👑 LATEST GOOGLE MODEL FIX: gemini-2.5-flash
                         model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=sys_prompt)
 
-                        # Chat History setup
                         if "chat_history" not in st.session_state:
                             st.session_state.chat_history = []
-                            st.session_state.chat_history.append({"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]})
+                            st.session_state.chat_history.append({"role": "model", "parts": ["Systems Online. Hello, how may I assist you today?"]})
 
-                        # Show previous chat messages
                         for msg in st.session_state.chat_history:
                             with st.chat_message("user" if msg["role"] == "user" else "assistant"):
                                 st.markdown(msg["parts"][0])
 
-                        # Chat input field
-                        prompt = st.chat_input("Puchiye, jaise 'Naya Invoice kaise banau?'")
+                        prompt = st.chat_input("Input query parameters...")
                         
                         if prompt:
                             st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
@@ -537,31 +631,30 @@ else:
                                 st.markdown(prompt)
                                 
                             with st.chat_message("assistant"):
-                                with st.spinner("AI Soch raha hai..."):
+                                with st.spinner("Processing node parameters..."):
                                     chat = model.start_chat(history=st.session_state.chat_history[:-1])
                                     response = chat.send_message(prompt)
                                     st.markdown(response.text)
                                     st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
                                     
-                        if st.button("🗑️ Clear Chat History"):
+                        if st.button("🗑️ Wipe Memory"):
                             st.session_state.chat_history = []
                             st.rerun()
 
                     except Exception as e:
-                        st.error(f"❌ Asli Error: {e}")
-                        st.info("Agar error aati hai toh shayad API key verify nahi ho rahi hai.")
-                        if st.button("Change API Key"):
+                        st.error(f"❌ Connection Severed: {e}")
+                        if st.button("Reset Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
 
-        elif menu == "📜 History":
-            st.title("📜 Document History & Analytics")
-            view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+        elif menu == "📜 Analytics History":
+            st.title("📜 Deep Analytics & Logs")
+            view_type = st.radio("Select Database Log:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Parties"] + [p['party_name'] for p in party_list]
-                sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_chal")
+                sel_history_p = st.selectbox("🔍 Isolate Node (Party Name)", p_names, key="hist_chal")
 
                 if sel_history_p == "All Parties":
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
@@ -573,10 +666,10 @@ else:
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['challan_date'], format='%d/%m/%Y', errors='coerce')
                     
-                    st.markdown(f"### 📈 {sel_history_p} Analytics")
+                    st.markdown(f"### 📈 Data Node: {sel_history_p}")
                     c1, c2 = st.columns(2)
-                    c1.metric("🧾 Total Challans Issued", f"{len(df)}")
-                    c2.metric("💰 Total Value of Challans", f"₹ {df['clean_amt'].sum():,.2f}")
+                    c1.metric("🧾 Total Transactions", f"{len(df)}")
+                    c2.metric("💰 Value Processed", f"₹ {df['clean_amt'].sum():,.2f}")
                     
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
@@ -587,7 +680,7 @@ else:
                         st.bar_chart(chart_data)
                     
                     st.markdown("---")
-                    st.write("**Recent Challan Records:**")
+                    st.write("**Blockchain Ledger (Recent):**")
 
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
                     for c in data[:50]:
@@ -597,11 +690,11 @@ else:
                             fd = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📝 Delivery Challan"}); st.rerun()
                         if c5_del.button("🗑️", key=f"dc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("No active Challans found for this selection.")
+                else: st.info("No records match parameters.")
             else:
                 party_list = fetch_data("SELECT DISTINCT bill_to_name FROM tax_invoices WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Parties"] + [p['bill_to_name'] for p in party_list]
-                sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_inv")
+                sel_history_p = st.selectbox("🔍 Isolate Node (Party Name)", p_names, key="hist_inv")
 
                 if sel_history_p == "All Parties":
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
@@ -613,10 +706,10 @@ else:
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['invoice_date'], format='%d/%m/%Y', errors='coerce')
                     
-                    st.markdown(f"### 📈 {sel_history_p} Analytics")
+                    st.markdown(f"### 📈 Data Node: {sel_history_p}")
                     c1, c2 = st.columns(2)
-                    c1.metric("🧾 Total Tax Invoices", f"{len(df)}")
-                    c2.metric("💰 Total Billing Amount", f"₹ {df['clean_amt'].sum():,.2f}")
+                    c1.metric("🧾 Total Transactions", f"{len(df)}")
+                    c2.metric("💰 Value Processed", f"₹ {df['clean_amt'].sum():,.2f}")
                     
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
@@ -627,7 +720,7 @@ else:
                         st.bar_chart(chart_data)
                         
                     st.markdown("---")
-                    st.write("**Recent Invoice Records:**")
+                    st.write("**Blockchain Ledger (Recent):**")
 
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
                     for c in data[:50]:
@@ -637,42 +730,39 @@ else:
                             fd = fetch_data("SELECT * FROM tax_invoices WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📄 Tax Invoice"}); st.rerun()
                         if c5_del.button("🗑️", key=f"di_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("No active Tax Invoices found for this selection.")
+                else: st.info("No records match parameters.")
 
         elif menu == "🗑️ Recycle Bin":
-            st.title("🗑️ Recycle Bin")
-            view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            st.title("🗑️ System Purge Container")
+            view_type = st.radio("Select Core:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 data = fetch_data("SELECT id, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
-                    if st.button("🚨 Empty Entire Challan Bin", type="primary"):
+                    if st.button("🚨 Purge Sector Permanently", type="primary"):
                         execute_data("DELETE FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                         st.rerun()
                     st.markdown("---")
                     for c in data:
                         c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['challan_no']); c2.write(c['party_name']); c3.write(c['amount'])
-                        if c4.button("🔄 Restore", key=f"rc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
-                        if c5.button("❌ Delete", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("Challan Recycle Bin is clean! ✨")
+                        if c4.button("🔄 Recover", key=f"rc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5.button("❌ Annihilate", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Sector Secure. No anomalies found.")
             else:
                 data = fetch_data("SELECT id, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
-                    if st.button("🚨 Empty Entire Invoice Bin", type="primary"):
+                    if st.button("🚨 Purge Sector Permanently", type="primary"):
                         execute_data("DELETE FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                         st.rerun()
                     st.markdown("---")
                     for c in data:
                         c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['invoice_no']); c2.write(c['bill_to_name']); c3.write(c['amount'])
-                        if c4.button("🔄 Restore", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
-                        if c5.button("❌ Delete", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("Tax Invoice Recycle Bin is clean! ✨")
+                        if c4.button("🔄 Recover", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5.button("❌ Annihilate", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Sector Secure. No anomalies found.")
 
-        # ==========================================
-        # TAX INVOICE ENGINE
-        # ==========================================
         elif menu == "📄 Tax Invoice":
             st.title("📄 Tax Invoice Engine")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
@@ -692,24 +782,17 @@ else:
 
             dash_party = st.session_state.pop('sel_inv_p', None)
             party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
+            default_idx = 0
+            if dash_party and dash_party != "-- Select Party from Master --":
+                for idx, p_nm in enumerate(party_names):
+                    if dash_party.lower() in p_nm.lower(): dash_party = p_nm; default_idx = idx; break
 
             if dash_party and dash_party != "-- Select Party from Master --":
                 pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
                 if pm:
-                    st.session_state.b1 = pm['party_name']
-                    st.session_state.b2 = pm['address']
-                    st.session_state.b3 = pm['gstin']
-                    st.session_state.b4 = pm['state']
-                    st.session_state.b5 = pm['state_code']
-                    st.session_state.pos_inv = pm.get('place_of_supply', '')
+                    st.session_state.b1, st.session_state.b2, st.session_state.b3, st.session_state.b4, st.session_state.b5, st.session_state.pos_inv = pm['party_name'], pm['address'], pm['gstin'], pm['state'], pm['state_code'], pm.get('place_of_supply', '')
             elif 'b1' not in st.session_state:
-                st.session_state.b1 = fd.get('bill_to_name', '')
-                st.session_state.b2 = fd.get('bill_to_address', '')
-                st.session_state.b3 = fd.get('bill_to_gstin', '')
-                st.session_state.b4 = fd.get('bill_to_state', '')
-                st.session_state.b5 = fd.get('bill_to_state_code', '')
-                st.session_state.pos_inv = fd.get('place_of_supply', '')
+                st.session_state.b1, st.session_state.b2, st.session_state.b3, st.session_state.b4, st.session_state.b5, st.session_state.pos_inv = fd.get('bill_to_name', ''), fd.get('bill_to_address', ''), fd.get('bill_to_gstin', ''), fd.get('bill_to_state', ''), fd.get('bill_to_state_code', ''), fd.get('place_of_supply', '')
 
             with st.expander("📌 Invoice & Transport Details", expanded=True):
                 c1, c2, c3, c4, c5_ew = st.columns([2, 2, 2, 2, 2])
@@ -729,23 +812,14 @@ else:
                 col_b, col_s = st.columns(2)
                 with col_b:
                     st.markdown("**Bill To Party:**")
-                    
                     def autofill_inv_party():
                         sel = st.session_state.sel_inv_p_widget
                         if sel != "-- Select Party from Master --":
                             pm = next((p for p in parties_db if p['party_name'] == sel), None)
-                            if pm:
-                                st.session_state.b1 = pm['party_name']
-                                st.session_state.b2 = pm['address']
-                                st.session_state.b3 = pm['gstin']
-                                st.session_state.b4 = pm['state']
-                                st.session_state.b5 = pm['state_code']
-                                st.session_state.pos_inv = pm.get('place_of_supply', '')
+                            if pm: st.session_state.b1, st.session_state.b2, st.session_state.b3, st.session_state.b4, st.session_state.b5, st.session_state.pos_inv = pm['party_name'], pm['address'], pm['gstin'], pm['state'], pm['state_code'], pm.get('place_of_supply', '')
                         else:
                             for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
-
                     sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_inv_p_widget", on_change=autofill_inv_party)
-                        
                     b_name = st.text_input("Name", key="b1")
                     b_add = st.text_area("Address", key="b2", height=68)
                     b_gst = st.text_input("GSTIN", key="b3")
@@ -756,22 +830,9 @@ else:
                 
                 with col_s:
                     st.markdown("**Shipped To Party:**")
-                    
-                    if 's1' not in st.session_state:
-                        st.session_state.s1 = fd.get('ship_to_name', '')
-                        st.session_state.s2 = fd.get('ship_to_address', '')
-                        st.session_state.s3 = fd.get('ship_to_gstin', '')
-                        st.session_state.s4 = fd.get('ship_to_state', '')
-                        st.session_state.s5 = fd.get('ship_to_state_code', '')
-
+                    if 's1' not in st.session_state: st.session_state.s1, st.session_state.s2, st.session_state.s3, st.session_state.s4, st.session_state.s5 = fd.get('ship_to_name', ''), fd.get('ship_to_address', ''), fd.get('ship_to_gstin', ''), fd.get('ship_to_state', ''), fd.get('ship_to_state_code', '')
                     same_as = st.checkbox("Same as Bill To")
-                    if same_as:
-                        st.session_state.s1 = st.session_state.b1
-                        st.session_state.s2 = st.session_state.b2
-                        st.session_state.s3 = st.session_state.b3
-                        st.session_state.s4 = st.session_state.b4
-                        st.session_state.s5 = st.session_state.b5
-                    
+                    if same_as: st.session_state.s1, st.session_state.s2, st.session_state.s3, st.session_state.s4, st.session_state.s5 = st.session_state.b1, st.session_state.b2, st.session_state.b3, st.session_state.b4, st.session_state.b5
                     s_name = st.text_input("Name", key="s1", disabled=same_as)
                     s_add = st.text_area("Address", key="s2", height=68, disabled=same_as)
                     s_gst = st.text_input("GSTIN", key="s3", disabled=same_as)
@@ -779,9 +840,7 @@ else:
                     s_scode = st.text_input("State Code", key="s5", disabled=same_as)
 
             st.subheader("📦 Item Details")
-            if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
-            else: items_db = []
-                
+            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p)) if sel_p != "-- Select Party from Master --" else []
             item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
             
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
@@ -792,25 +851,14 @@ else:
                 sel = st.session_state[f"sel_it_inv_widget_{index}"]
                 if sel != "-- Custom Item --":
                     im = next((it for it in db if it['item_description'] == sel), None)
-                    if im:
-                        st.session_state[f"id_{index}"] = im['item_description']
-                        st.session_state[f"ih_{index}"] = im['hsn_code']
-                        st.session_state[f"ir_{index}"] = float(im.get('rate', 0.0))
+                    if im: st.session_state[f"id_{index}"], st.session_state[f"ih_{index}"], st.session_state[f"ir_{index}"] = im['item_description'], im['hsn_code'], float(im.get('rate', 0.0))
 
             items_data = []
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
-                
-                if f"id_{i}" not in st.session_state:
-                    st.session_state[f"id_{i}"] = ex.get('desc', '')
-                    st.session_state[f"ih_{i}"] = ex.get('hsn', '')
-                    st.session_state[f"ib_{i}"] = ex.get('boxes', '')
-                    st.session_state[f"iq_{i}"] = float(ex.get('qty', 0))
-                    st.session_state[f"ir_{i}"] = float(ex.get('rate', 0))
-
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
-                
+                if f"id_{i}" not in st.session_state: st.session_state[f"id_{i}"], st.session_state[f"ih_{i}"], st.session_state[f"ib_{i}"], st.session_state[f"iq_{i}"], st.session_state[f"ir_{i}"] = ex.get('desc', ''), ex.get('hsn', ''), ex.get('boxes', ''), float(ex.get('qty', 0)), float(ex.get('rate', 0))
+                st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
                 with c1: desc = st.text_input("Description", key=f"id_{i}")
                 with c2: hsn = st.text_input("HSN Code", key=f"ih_{i}")
@@ -828,7 +876,6 @@ else:
                 c_dl1, c_dl2, c_wa = st.columns([2, 2, 1.5])
                 c_dl1.download_button("📄 Download Company Copies (3 Pages)", data=st.session_state['pdf_comp'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_Company.pdf", mime="application/pdf", type="primary")
                 c_dl2.download_button("📁 Download Office Copy (1 Page)", data=st.session_state['pdf_off'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_OfficeCopy.pdf", mime="application/pdf")
-                
                 wa_msg = f"Hello {st.session_state.get('b1', 'Sir/Madam')},%0A%0AHere are your billing details from *{my_company['name']}*:%0A*Invoice No:* {st.session_state['inv_no']}%0A*Amount:* {st.session_state.get('inv_amt', '')}%0A%0AThank you for your business!"
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Send on WhatsApp", wa_link)
@@ -857,14 +904,14 @@ else:
                     if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
                     else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
-                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
+                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; background:white;} .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px; color:black;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; color:black;} .header-right { position: absolute; top: 10px; right: 10px; text-align: right; color:black;} table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; color:black;} .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
                     html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
                     html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
                     html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
 
-                    full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
-                    full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
+                    full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body style='background:white;'>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
+                    full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body style='background:white;'>{html_4}</body></html>"
                     
                     st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
                     st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
@@ -872,9 +919,6 @@ else:
                     st.session_state['inv_amt'] = f"₹{total_after:.2f}"
                     st.rerun()
 
-        # ==========================================
-        # DELIVERY CHALLAN ENGINE
-        # ==========================================
         elif menu == "📝 Delivery Challan":
             st.title("📝 Delivery Challan Engine")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
@@ -894,49 +938,32 @@ else:
 
             dash_party = st.session_state.pop('sel_chal_p', None)
             party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
+            default_idx = 0
+            if dash_party and dash_party != "-- Select Party from Master --":
+                for idx, p_nm in enumerate(party_names):
+                    if dash_party.lower() in p_nm.lower(): dash_party = p_nm; default_idx = idx; break
             
             if dash_party and dash_party != "-- Select Party from Master --":
                 pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
-                if pm:
-                    st.session_state.p_name = pm['party_name']
-                    st.session_state.p_add = pm['address']
-                    st.session_state.p_gst = pm['gstin']
-                    st.session_state.p_state = pm['state']
-                    st.session_state.p_scode = pm['state_code']
-                    st.session_state.pos_chal = pm.get('place_of_supply', '')
+                if pm: st.session_state.p_name, st.session_state.p_add, st.session_state.p_gst, st.session_state.p_state, st.session_state.p_scode, st.session_state.pos_chal = pm['party_name'], pm['address'], pm['gstin'], pm['state'], pm['state_code'], pm.get('place_of_supply', '')
             elif 'p_name' not in st.session_state:
-                st.session_state.p_name = fd.get('party_name', '')
-                st.session_state.p_add = fd.get('party_address', '')
-                st.session_state.p_gst = fd.get('party_gstin', '')
-                st.session_state.p_state = fd.get('party_state', '')
-                st.session_state.p_scode = fd.get('party_state_code', '')
-                st.session_state.pos_chal = fd.get('place_of_supply', '')
+                st.session_state.p_name, st.session_state.p_add, st.session_state.p_gst, st.session_state.p_state, st.session_state.p_scode, st.session_state.pos_chal = fd.get('party_name', ''), fd.get('party_address', ''), fd.get('party_gstin', ''), fd.get('party_state', ''), fd.get('party_state_code', ''), fd.get('place_of_supply', '')
 
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Dispatch To Party Details:**")
-                
                 def autofill_chal_party():
                     sel = st.session_state.sel_chal_p_widget
                     if sel != "-- Select Party from Master --":
                         pm = next((p for p in parties_db if p['party_name'] == sel), None)
-                        if pm:
-                            st.session_state.p_name = pm['party_name']
-                            st.session_state.p_add = pm['address']
-                            st.session_state.p_gst = pm['gstin']
-                            st.session_state.p_state = pm['state']
-                            st.session_state.p_scode = pm['state_code']
-                            st.session_state.pos_chal = pm.get('place_of_supply', '')
+                        if pm: st.session_state.p_name, st.session_state.p_add, st.session_state.p_gst, st.session_state.p_state, st.session_state.p_scode, st.session_state.pos_chal = pm['party_name'], pm['address'], pm['gstin'], pm['state'], pm['state_code'], pm.get('place_of_supply', '')
                     else:
                         for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
                 
                 sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_chal_p_widget", on_change=autofill_chal_party)
-                        
                 party_name = st.text_input("Dispatch To (Party Name)", key="p_name")
                 party_address = st.text_area("Party Address", key="p_add")
                 party_gstin = st.text_input("Party GSTIN", key="p_gst")
-                
                 c_st1, c_st2, c_st3 = st.columns(3)
                 with c_st1: party_state = st.text_input("Party State", key="p_state")
                 with c_st2: party_state_code = st.text_input("State Code", key="p_scode")
@@ -952,9 +979,7 @@ else:
                 date_of_supply = st.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time))
 
             st.subheader("📦 Item Details")
-            if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
-            else: items_db = []
-                
+            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p)) if sel_p != "-- Select Party from Master --" else []
             item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
 
             c_btn1, c_btn2, _ = st.columns([2, 2, 8])
@@ -965,25 +990,14 @@ else:
                 sel = st.session_state[f"sel_it_chal_widget_{index}"]
                 if sel != "-- Custom Item --":
                     im = next((it for it in db if it['item_description'] == sel), None)
-                    if im:
-                        st.session_state[f"desc_{index}"] = im['item_description']
-                        st.session_state[f"hsn_{index}"] = im['hsn_code']
-                        st.session_state[f"rate_{index}"] = float(im.get('rate', 0.0))
+                    if im: st.session_state[f"desc_{index}"], st.session_state[f"hsn_{index}"], st.session_state[f"rate_{index}"] = im['item_description'], im['hsn_code'], float(im.get('rate', 0.0))
 
             items_data = []
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item {i+1}**")
-                
-                if f"desc_{i}" not in st.session_state:
-                    st.session_state[f"desc_{i}"] = ex.get('desc', '')
-                    st.session_state[f"hsn_{i}"] = ex.get('hsn', '')
-                    st.session_state[f"box_{i}"] = ex.get('boxes', '')
-                    st.session_state[f"qty_{i}"] = float(ex.get('qty', 0))
-                    st.session_state[f"rate_{i}"] = float(ex.get('rate', 0))
-                
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
-                
+                if f"desc_{i}" not in st.session_state: st.session_state[f"desc_{i}"], st.session_state[f"hsn_{i}"], st.session_state[f"box_{i}"], st.session_state[f"qty_{i}"], st.session_state[f"rate_{i}"] = ex.get('desc', ''), ex.get('hsn', ''), ex.get('boxes', ''), float(ex.get('qty', 0)), float(ex.get('rate', 0))
+                st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
                 with c1: desc = st.text_input("Description", key=f"desc_{i}")
                 with c2: hsn = st.text_input("HSN Code", key=f"hsn_{i}")
@@ -1005,28 +1019,28 @@ else:
                 items_html = ""
                 for idx, item in enumerate(items_data):
                     qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
-                    items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
+                    items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item['hsn']}</td><td style='text-align:center; border: 1px solid #000;'>{item['boxes']}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{item['rate']:.2f}</td><td style='text-align:right; border: 1px solid #000;'>{item['amount']:.2f}</td></tr>"
 
                 eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
 
                 html_content = f"""
                 <!DOCTYPE html><html><head><style>
                 @page {{ size: A4; margin: 10mm 5mm; }} 
-                body {{ font-family: Arial, sans-serif; font-size: 12px; color: #1c2d42; }} 
+                body {{ font-family: Arial, sans-serif; font-size: 12px; color: #000; background:white;}} 
                 .container {{ border: 2px solid #1c2d42; width: 100%; }} 
-                .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; }} 
+                .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; color:black;}} 
                 .header h2 {{ margin: 0 0 5px 0; color: #1c2d42; font-size: 18px; text-decoration: underline; letter-spacing: 1.5px; font-weight: bold; text-transform: uppercase; }} 
                 .header h1 {{ margin: 5px 0; color: #1c2d42; font-size: 32px; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 900; }} 
                 .header p {{ margin: 3px 0; font-size: 12px; color: #1c2d42; }} 
                 .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #1c2d42; line-height: 1.5; }} 
-                table {{ width: 100%; border-collapse: collapse; }} 
-                td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }} 
+                table {{ width: 100%; border-collapse: collapse; color:black;}} 
+                td, th {{ border: 1px solid #000; padding: 6px; vertical-align: top; color:black;}} 
                 .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }} 
                 .spacer-row td {{ height: 260px; border-top: none; border-bottom: none; }} 
-                .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; }} 
+                .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; color:black;}} 
                 .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
                 </style></head>
-                <body>
+                <body style='background:white;'>
                     <div class="container">
                         <div class="header">
                             <div class="top-left-info"><strong>GSTIN:</strong> {my_company['gstin']}<br><strong>State:</strong> {my_company['state']}<br><strong>Code:</strong> {my_company['state_code']}</div>
@@ -1037,9 +1051,9 @@ else:
                                 <td style="width: 50%; border-right: 2px solid #1c2d42;"><strong>Dispatch To:</strong><br><strong>{party_name}</strong><br>{party_address.replace(chr(10), '<br>')}<br><strong>GSTIN:</strong> {party_gstin}<br><strong>State:</strong> {party_state} &nbsp;&nbsp;&nbsp; <strong>Code:</strong> {party_state_code}</td>
                                 <td style="width: 50%; padding: 0;">
                                     <table style="border:none; width: 100%;">
-                                        <tr><td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td><td style="border:none; border-left: 1px solid #aeb6bf; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td></tr>
-                                        <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td></tr>
-                                        <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
+                                        <tr><td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td><td style="border:none; border-left: 1px solid #000; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td></tr>
+                                        <tr><td style="border:none; border-top: 1px solid #000; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td><td style="border:none; border-top: 1px solid #000; border-left: 1px solid #000; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td></tr>
+                                        <tr><td style="border:none; border-top: 1px solid #000; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply}</td><td style="border:none; border-top: 1px solid #000; border-left: 1px solid #000; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
                                         {eway_row}
                                     </table>
                                 </td>
@@ -1047,14 +1061,14 @@ else:
                         </table>
                         <table class="items-table">
                             <tr><th style="width:5%;">S.No</th><th style="width:35%;">Product Description</th><th style="width:10%;">HSN Code</th><th style="width:10%;">No of Box</th><th style="width:10%;">Total Qty</th><th style="width:12%;">Approx. Rate</th><th style="width:18%;">Approx. Amount</th></tr>
-                            {items_html}<tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                            {items_html}<tr class="spacer-row"><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td></tr>
                         </table>
                         <table style="border-top: 2px solid #1c2d42;">
-                            <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:20%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:20%; text-align:right;">{total_before:.2f}</td></tr>
-                            <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
-                            <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
-                            <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
-                            <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_after:.2f}</td></tr>
+                            <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:20%; text-align:right; background-color:#f8f9fa; border: 1px solid #000;">Total Before Tax</td><td style="width:20%; text-align:right; border: 1px solid #000;">{total_before:.2f}</td></tr>
+                            <tr><td style="text-align:right; background-color:#f8f9fa; border: 1px solid #000;">Add: CGST @ 9%</td><td style="text-align:right; border: 1px solid #000;">{total_before * 0.09:.2f}</td></tr>
+                            <tr><td style="text-align:right; background-color:#f8f9fa; border: 1px solid #000;">Add: SGST @ 9%</td><td style="text-align:right; border: 1px solid #000;">{total_before * 0.09:.2f}</td></tr>
+                            <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold; border: 1px solid #000;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; border: 1px solid #000;">{total_tax:.2f}</td></tr>
+                            <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">{total_after:.2f}</td></tr>
                         </table>
                         <div class="footer"><p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p><div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div></div>
                     </div>
