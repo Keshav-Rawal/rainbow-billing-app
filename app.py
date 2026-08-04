@@ -291,7 +291,6 @@ else:
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        # YAHAN MENU MEIN AI ASSISTANT ADD KIYA HAI
         menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
@@ -482,7 +481,7 @@ else:
                         os.remove(tmp_path)
 
         # ==========================================
-        # AI ASSISTANT MODULE (NEW PHASE 3)
+        # AI ASSISTANT MODULE
         # ==========================================
         elif menu == "🤖 AI Assistant":
             st.title("🤖 Rainbow AI Assistant")
@@ -555,7 +554,9 @@ else:
                             st.rerun()
 
                     except Exception as e:
-                        st.error("❌ API Key shayad galat hai ya internet issue hai. Check karke dobara try karein.")
+                        # YAHAN AAYEGA ASLI ERROR KA REASON!
+                        st.error(f"❌ Asli Error: {e}")
+                        st.info("Oopar likhi error se pata chalega ki API key galat hai ya internet block ho raha hai.")
                         if st.button("Change API Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
