@@ -481,11 +481,11 @@ else:
                         os.remove(tmp_path)
 
         # ==========================================
-        # 🤖 AGENTIC AI ASSISTANT (J.A.R.V.I.S MODE)
+        # AI ASSISTANT MODULE (LATEST MODEL 2.5 FIX)
         # ==========================================
         elif menu == "🤖 AI Assistant":
-            st.title("🤖 Rainbow Agentic AI (Auto-Billing)")
-            st.write("Ab AI se sirf baat nahi, direct kaam karwao! Likho: **'C&S Electric ka 50 piece ka bill bana do jiska rate 12.5 hai'**")
+            st.title("🤖 Rainbow AI Assistant")
+            st.write("Aapke ERP ka smart helper! Puchiye app kaise use karna hai, kaise bill banana hai, ya koi bhi dusra sawal.")
             st.markdown("---")
 
             if not HAS_AI:
@@ -495,7 +495,7 @@ else:
                     st.session_state.gemini_api_key = ""
                 
                 if not st.session_state.gemini_api_key:
-                    st.info("💡 AI chalane ke liye ek free Google Gemini API key ki zaroorat hai.")
+                    st.info("💡 AI chalane ke liye ek free Google Gemini API key ki zaroorat hai. (Google AI Studio se mil jayegi)")
                     api_input = st.text_input("Enter Gemini API Key:", type="password")
                     if st.button("Save Key & Start AI"):
                         st.session_state.gemini_api_key = api_input
@@ -503,33 +503,33 @@ else:
                 else:
                     try:
                         genai.configure(api_key=st.session_state.gemini_api_key)
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        
+                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart aur helpful assistant ho. 
+                        Tumhara kaam staff ko ERP use karna sikhana hai. 
+                        ERP me yeh 5 main features hain:
+                        1. Dashboard: Yahan se direct kisi bhi party ka bill/challan bana sakte hain.
+                        2. Add Master Data: Yahan naye client ka naam, GST aur uske specific items save hote hain.
+                        3. Tax Invoice & Delivery Challan: Master data se autofill karke bill banate hain. IGST/CGST automatically calculate hota hai.
+                        4. 3D Part Viewer: Factory waale .STL file upload karke plastic part (PP, ABS) ka exact weight aur factory margin nikal sakte hain.
+                        5. History: Purane bills dekhne ke liye.
+                        
+                        Tumhe humesha friendly, professional aur 'Hinglish' (Hindi + English) bhasha mein chote aur clear points mein jawab dena hai. Jawab mein zaroorat padne par emojis ka use karein. Kabhi bhi code ya programming ki baatein na karein, sirf user/staff ki madad karein."""
 
-                        # THE MASTER J.A.R.V.I.S PROMPT
-                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart assistant ho.
-                        AGAR user tumhe INVOICE ya BILL banane ko bole (jaise: "C&S electric ka 50 piece ka bill banao 12 rate se"), 
-                        toh tum normal reply MAT dena. Sirf aur sirf ek valid JSON output karna jiska format exact aisa ho:
-                        {
-                          "action": "create_invoice",
-                          "party_name": "C&S Electric",
-                          "items": [
-                            {"desc": "Item Name", "qty": 50, "rate": 12}
-                          ]
-                        }
-                        AGAR user bill banane ko NA bole, toh normal Hinglish mein madad karo. Code ya JSON mat dikhana.
-                        """
+                        # 👑 LATEST GOOGLE MODEL FIX: gemini-2.5-flash
+                        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=sys_prompt)
 
+                        # Chat History setup
                         if "chat_history" not in st.session_state:
-                            st.session_state.chat_history = [
-                                {"role": "user", "parts": ["Hello"]},
-                                {"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, kya main aapka koi naya bill auto-fill karu?"]}
-                            ]
+                            st.session_state.chat_history = []
+                            st.session_state.chat_history.append({"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]})
 
-                        for msg in st.session_state.chat_history[1:]:
+                        # Show previous chat messages
+                        for msg in st.session_state.chat_history:
                             with st.chat_message("user" if msg["role"] == "user" else "assistant"):
                                 st.markdown(msg["parts"][0])
 
-                        prompt = st.chat_input("Likhiye: 'C&S Electric ka 50 piece ka bill banao 15 Rs rate se'")
+                        # Chat input field
+                        prompt = st.chat_input("Puchiye, jaise 'Naya Invoice kaise banau?'")
                         
                         if prompt:
                             st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
@@ -537,52 +537,19 @@ else:
                                 st.markdown(prompt)
                                 
                             with st.chat_message("assistant"):
-                                with st.spinner("AI Details Padh Raha Hai..."):
-                                    if len(st.session_state.chat_history) == 3:
-                                        hidden_prompt = f"[System Rules: {sys_prompt}]\n\nUser's Request: {prompt}"
-                                    else:
-                                        hidden_prompt = prompt
-                                        
+                                with st.spinner("AI Soch raha hai..."):
                                     chat = model.start_chat(history=st.session_state.chat_history[:-1])
-                                    response = chat.send_message(hidden_prompt)
-                                    resp_text = response.text
+                                    response = chat.send_message(prompt)
+                                    st.markdown(response.text)
+                                    st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
                                     
-                                    # 🕵️‍♂️ MAGIC INTERCEPTOR (Agar AI ne JSON bheja, toh pakdo!)
-                                    if "create_invoice" in resp_text and "{" in resp_text:
-                                        try:
-                                            # Sirf JSON code bahar nikalna
-                                            json_str = resp_text[resp_text.find("{"):resp_text.rfind("}")+1]
-                                            ai_data = json.loads(json_str)
-                                            
-                                            if ai_data.get("action") == "create_invoice":
-                                                # Data ko session (memory) mein daalna
-                                                st.session_state['sel_inv_p'] = ai_data.get('party_name', '')
-                                                st.session_state['form_items'] = ai_data.get('items', [])
-                                                st.session_state['item_count'] = len(ai_data.get('items', [])) or 1
-                                                
-                                                # Purane item boxes saaf karna
-                                                for k in list(st.session_state.keys()):
-                                                    if re.match(r'^(id_|ih_|ib_|iq_|ir_)\d+', k):
-                                                        del st.session_state[k]
-                                                        
-                                                # Invoice Page par redirect marna
-                                                st.session_state['redirect_menu'] = "📄 Tax Invoice"
-                                                st.success("🤖 AI ne form bhar diya hai! Redirecting to Invoice Page...")
-                                                time.sleep(1.5)
-                                                st.rerun()
-                                        except Exception as e:
-                                            st.markdown(resp_text)
-                                            st.session_state.chat_history.append({"role": "model", "parts": [resp_text]})
-                                    else:
-                                        st.markdown(resp_text)
-                                        st.session_state.chat_history.append({"role": "model", "parts": [resp_text]})
-                                    
-                        if st.button("🗑️ Clear Chat"):
-                            del st.session_state.chat_history
+                        if st.button("🗑️ Clear Chat History"):
+                            st.session_state.chat_history = []
                             st.rerun()
 
                     except Exception as e:
                         st.error(f"❌ Asli Error: {e}")
+                        st.info("Agar error aati hai toh shayad API key verify nahi ho rahi hai.")
                         if st.button("Change API Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
@@ -704,7 +671,7 @@ else:
                 else: st.info("Tax Invoice Recycle Bin is clean! ✨")
 
         # ==========================================
-        # TAX INVOICE ENGINE (SMART AUTOFILL READY)
+        # TAX INVOICE ENGINE
         # ==========================================
         elif menu == "📄 Tax Invoice":
             st.title("📄 Tax Invoice Engine")
@@ -725,15 +692,7 @@ else:
 
             dash_party = st.session_state.pop('sel_inv_p', None)
             party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
-            default_idx = 0
-            
-            # Smart Soft-Match (Agar AI 'C&S' bole aur database mein 'C&S Electric' ho)
-            if dash_party and dash_party != "-- Select Party from Master --":
-                for idx, p_nm in enumerate(party_names):
-                    if dash_party.lower() in p_nm.lower():
-                        dash_party = p_nm
-                        default_idx = idx
-                        break
+            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
 
             if dash_party and dash_party != "-- Select Party from Master --":
                 pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
