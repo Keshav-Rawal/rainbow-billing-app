@@ -28,89 +28,78 @@ except ImportError:
     HAS_AI = False
 
 # -----------------------------------------------------
-# 🌟 WORLD-CLASS UI SETUP (GLASSMORPHISM & 3D NEON)
+# 🌟 CORPORATE ENTERPRISE UI (CLEAN & PROFESSIONAL)
 # -----------------------------------------------------
-st.set_page_config(page_title="Rainbow ERP - Pro SaaS", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Rainbow ERP - Enterprise", page_icon="🏢", layout="wide")
 
 custom_css = """
 <style>
-/* 1. Main Background Gradient (Deep Industrial Cyberpunk Theme) */
+/* 1. Clean App Background (Light Corporate Gray) */
 .stApp {
-    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-    color: #e0e0e0 !important;
+    background-color: #f4f6f9;
 }
 
-/* 2. Glassmorphism Sidebar */
+/* 2. Sidebar Styling */
 [data-testid="stSidebar"] {
-    background: rgba(15, 32, 39, 0.85) !important;
-    backdrop-filter: blur(15px);
-    border-right: 1px solid rgba(0, 210, 255, 0.2);
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0;
 }
 
-/* 3. 3D Glowing Hover Effect for Sidebar Menu & Buttons */
+/* 3. Professional Buttons */
 div.stButton > button {
-    background: linear-gradient(90deg, #1CB5E0 0%, #000851 100%);
-    color: white !important;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.2);
-    padding: 10px 20px;
-    font-weight: bold;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    transition: all 0.3s ease-in-out;
+    background-color: #1a4f8b;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 div.stButton > button:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 8px 25px rgba(28, 181, 224, 0.6);
-    border-color: #1CB5E0;
+    background-color: #11365f;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    color: #ffffff !important;
 }
 
-/* 4. Beautiful Glass Cards for Metrics & Containers */
-div[data-testid="metric-container"], .css-1r6slb0, div[data-testid="stExpander"] {
-    background: rgba(255, 255, 255, 0.03) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    padding: 15px;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-    transition: transform 0.3s ease, border-color 0.3s ease;
-}
-div[data-testid="metric-container"]:hover {
-    transform: translateY(-5px);
-    border-color: #00d2ff !important;
-    box-shadow: 0 10px 30px rgba(0, 210, 255, 0.2);
+/* 4. White Cards for Metrics & Forms */
+div[data-testid="metric-container"], div[data-testid="stExpander"] {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    padding: 1rem;
 }
 
-/* 5. Typography (Neon Accents) */
-h1, h2, h3 {
-    color: #00d2ff !important;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    text-shadow: 1px 1px 10px rgba(0, 210, 255, 0.2);
+/* 5. Typography (Dark Slate for Readability) */
+h1, h2, h3, h4 {
+    color: #1e293b !important;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    font-weight: 600 !important;
 }
-p, span, label, div {
-    color: #f1f2f6 !important;
+p, span, label {
+    color: #334155 !important;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 }
 
-/* 6. Form Inputs Styling (Dark Glass) */
+/* 6. Clean Inputs */
 .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input {
-    background-color: rgba(0, 0, 0, 0.4) !important;
-    color: #00d2ff !important;
-    border: 1px solid rgba(0, 210, 255, 0.3) !important;
-    border-radius: 8px !important;
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
 }
 .stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus {
-    box-shadow: 0 0 10px rgba(0, 210, 255, 0.5) !important;
+    border-color: #1a4f8b !important;
+    box-shadow: 0 0 0 1px #1a4f8b !important;
 }
 
-/* Fix for internal expander content visibility */
+/* Expander background fix */
 .streamlit-expanderContent {
-    background: transparent !important;
-    border: none !important;
+    background-color: #ffffff !important;
+    border-top: 1px solid #e2e8f0 !important;
 }
-
-/* Custom Scrollbar */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-::-webkit-scrollbar-thumb { background: #1CB5E0; border-radius: 10px; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -227,7 +216,7 @@ if "auth_logged_in" not in st.session_state:
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
 # ==========================================
-# 3. HTML GENERATOR FOR TAX INVOICE (STAYS WHITE/CLEAR FOR PRINTING)
+# 3. HTML GENERATOR FOR TAX INVOICE (STAYS CLEAR FOR PRINTING)
 # ==========================================
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
@@ -333,14 +322,15 @@ if not st.session_state.get("auth_logged_in"):
     st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
+        # CLEAN LOGIN CARD
         st.markdown('''
-            <div style="background: rgba(0,0,0,0.5); padding: 40px; border-radius: 20px; text-align:center; box-shadow: 0 10px 30px rgba(0,210,255,0.2); border: 1px solid rgba(0,210,255,0.3);">
-                <h1 style="font-size:40px; text-shadow: 2px 2px 10px rgba(0,210,255,0.8);">🌈 RAINBOW ERP</h1>
-                <p style="color:#a0a0a0; font-style:italic;">Next-Gen SaaS Manufacturing Portal</p>
+            <div style="background-color: #ffffff; padding: 40px; border-radius: 8px; text-align:center; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                <h1 style="color: #1a4f8b; font-size:32px; margin:0;">RAINBOW ERP</h1>
+                <p style="color:#64748b; font-size: 14px; margin-top: 5px;">Enterprise Portal Login</p>
             </div><br>
         ''', unsafe_allow_html=True)
-        u = st.text_input("🛡️ Username (ID)"); p = st.text_input("🔑 Password", type="password")
-        if st.button("🚀 Secure Login", use_container_width=True):
+        u = st.text_input("Username (ID)"); p = st.text_input("Password", type="password")
+        if st.button("Secure Login", use_container_width=True):
             user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
             if user:
                 st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
@@ -357,9 +347,9 @@ else:
     uid = st.session_state.auth_uid
     my_company = get_company_profile(uid)
     
-    st.sidebar.markdown(f"<h2 style='text-align:center; border-bottom: 1px solid rgba(0,210,255,0.3); padding-bottom: 10px;'>🏭 RAINBOW ERP</h2>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"<p style='text-align:center;'>Welcome back, <br><b style='color:#00d2ff; font-size:18px;'>{safe_name}</b></p>", unsafe_allow_html=True)
-    if st.sidebar.button("🔒 Secure Logout", use_container_width=True):
+    st.sidebar.markdown(f"<h2 style='color:#1a4f8b; text-align:center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;'>🏭 RAINBOW ERP</h2>", unsafe_allow_html=True)
+    st.sidebar.markdown(f"<p style='text-align:center; color:#64748b;'>Welcome back, <br><b style='color:#1e293b; font-size:16px;'>{safe_name}</b></p>", unsafe_allow_html=True)
+    if st.sidebar.button("🔒 Logout", use_container_width=True):
         for k in list(st.session_state.keys()):
             if k not in ["cookie_manager"]: st.session_state.pop(k, None)
         cookie_manager.delete("rainbow_erp_auth"); time.sleep(0.5); st.rerun()
@@ -370,17 +360,17 @@ else:
         del st.session_state.redirect_menu
 
     if role == "SUPERADMIN":
-        st.title("👑 Super Admin Command Center")
+        st.title("👑 Super Admin Control")
         all_users = fetch_data("SELECT * FROM users")
         total_clients = sum(1 for u in all_users if u['role'] == 'customer')
-        m1, m2 = st.columns(2); m1.metric("Total Active Clients", str(total_clients)); m2.metric("Monthly SaaS Revenue", f"₹{total_clients * 2499}")
+        m1, m2 = st.columns(2); m1.metric("Active Clients", str(total_clients)); m2.metric("SaaS Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
         with st.form("create_user_form", clear_on_submit=True):
             new_uid = st.text_input("Username / Login ID")
             new_pass = st.text_input("Password", type="password")
             new_fullname = st.text_input("Full Name / Factory Name")
             new_role_select = st.selectbox("Role", ["customer", "superadmin"])
-            if st.form_submit_button("🚀 Create Live Account"):
+            if st.form_submit_button("Create Live Account"):
                 if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
                     st.success("Account Created!"); time.sleep(0.5); st.rerun()
         st.subheader("👥 Live User Matrix")
@@ -390,14 +380,12 @@ else:
         menu = st.sidebar.radio("Navigation Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
-            # GORGEOUS INDUSTRIAL BANNER
+            # CLEAN CORPORATE BANNER
             st.markdown('''
-                <div style="width: 100%; height: 280px; border-radius: 20px; background: url('https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop'); background-size: cover; background-position: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(0,210,255,0.3); border: 2px solid rgba(0,210,255,0.4); position:relative;">
-                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); border-radius:20px;"></div>
-                    <h1 style="color: #fff; text-shadow: 0px 4px 15px rgba(0, 210, 255, 1); font-size: 55px; z-index:2; margin:0; letter-spacing: 2px;">RAINBOW ERP</h1>
-                    <p style="color: #00d2ff; font-size: 20px; z-index:2; font-weight:bold; letter-spacing: 1px; text-transform: uppercase;">Smart Industrial Management</p>
+                <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; border-left: 6px solid #1a4f8b; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px;">
+                    <h1 style="color: #1e293b; font-size: 28px; margin: 0;">RAINBOW ERP</h1>
+                    <p style="color: #64748b; font-size: 16px; margin: 5px 0 0 0;">Manufacturing Control & Enterprise Resource Planning</p>
                 </div>
-                <br><br>
             ''', unsafe_allow_html=True)
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
@@ -405,17 +393,16 @@ else:
             if not parties_db:
                 st.info("Abhi tak koi Client add nahi kiya hai. Left menu se '📦 Add Master Data' mein jaakar apni pehli party add karein.")
             else:
-                st.markdown("<h3 style='text-align:center;'>🚀 Quick Access Client Matrix</h3><br>", unsafe_allow_html=True)
+                st.markdown("<h3 style='color:#1e293b; font-size: 20px;'>Quick Access: Clients</h3>", unsafe_allow_html=True)
                 cols = st.columns(3)
                 for idx, p in enumerate(parties_db):
                     with cols[idx % 3]:
-                        # CUSTOM GLASS CARD FOR PARTIES
+                        # CLEAN PARTY CARDS
                         st.markdown(f'''
-                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(0,210,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); text-align:center; backdrop-filter: blur(5px);">
-                            <h2 style="margin-top:0; font-size:22px;">🏢 {p['party_name']}</h2>
-                            <p style="color:#b0bec5 !important; font-size:14px; margin-bottom:15px;"><b>State:</b> {p['state']} | <b>GST:</b> {p['gstin']}</p>
+                        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 10px;">
+                            <h3 style="margin-top:0; color:#1a4f8b; font-size:18px;">🏢 {p['party_name']}</h3>
+                            <p style="color:#64748b; font-size:13px; margin-bottom:15px;"><b>State:</b> {p['state']} | <b>GST:</b> {p['gstin']}</p>
                         </div>
-                        <div style="height: 10px;"></div>
                         ''', unsafe_allow_html=True)
                         
                         c_inv, c_chal = st.columns(2)
@@ -434,11 +421,11 @@ else:
                             execute_data("DELETE FROM item_master WHERE party_name=%s AND uid=%s", (p['party_name'], uid)) 
                             st.rerun()
                         
-                        st.markdown("<br><br>", unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
 
         elif menu == "⚙️ Company Profile":
             st.title("⚙️ Global Profile Setup")
-            st.markdown("<p style='color:#a0a0a0;'>Apni factory/company ki exact details yahan daalein taaki sabhi bills par professionally print ho.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#64748b;'>Apni factory/company ki exact details yahan daalein taaki sabhi bills par professionally print ho.</p>", unsafe_allow_html=True)
             c_name = st.text_input("Company/Factory Name", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
             c_gst = st.text_input("GSTIN Number", value=my_company["gstin"], key="c_gst")
@@ -500,7 +487,7 @@ else:
                                 st.rerun()
 
         elif menu == "📐 3D Part Viewer":
-            st.title("📐 Quantum 3D Viewer & Mass Estimator")
+            st.title("📐 3D Viewer & Mass Estimator")
             st.write("Upload **.STL or .OBJ** mesh geometry. Calculate exact mass matrices with programmable scrap margins.")
             
             if not HAS_3D:
@@ -553,13 +540,12 @@ else:
                             m4.metric(f"🛠️ Production Mass (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
                             
                             st.markdown("---")
-                            st.subheader("🔍 Interactive Hologram")
+                            st.subheader("🔍 Interactive View")
                             
                             vertices = mesh.vertices
                             faces = mesh.faces
                             
-                            # Premium 3D Theme adjustment
-                            mesh_color = '#00d2ff' if "Aluminium" not in selected_material and "SS304" not in selected_material else '#silver'
+                            mesh_color = '#1a4f8b' if "Aluminium" not in selected_material and "SS304" not in selected_material else '#silver'
 
                             fig = go.Figure(data=[
                                 go.Mesh3d(
@@ -590,7 +576,7 @@ else:
                         os.remove(tmp_path)
 
         elif menu == "🤖 AI Assistant":
-            st.title("🤖 RAINBOW OMNI-AI")
+            st.title("🤖 Rainbow AI Assistant")
             st.write("Aapke ERP ka central brain. System queries ya manufacturing data ke liye interact karein.")
             st.markdown("---")
 
@@ -601,9 +587,9 @@ else:
                     st.session_state.gemini_api_key = ""
                 
                 if not st.session_state.gemini_api_key:
-                    st.info("💡 Link Gemini Neural API key to activate.")
+                    st.info("💡 Link Gemini API key to activate.")
                     api_input = st.text_input("Enter API Key:", type="password")
-                    if st.button("Establish Neural Link"):
+                    if st.button("Connect API"):
                         st.session_state.gemini_api_key = api_input
                         st.rerun()
                 else:
@@ -617,13 +603,13 @@ else:
 
                         if "chat_history" not in st.session_state:
                             st.session_state.chat_history = []
-                            st.session_state.chat_history.append({"role": "model", "parts": ["Systems Online. Hello, how may I assist you today?"]})
+                            st.session_state.chat_history.append({"role": "model", "parts": ["Hello, how may I assist you today?"]})
 
                         for msg in st.session_state.chat_history:
                             with st.chat_message("user" if msg["role"] == "user" else "assistant"):
                                 st.markdown(msg["parts"][0])
 
-                        prompt = st.chat_input("Input query parameters...")
+                        prompt = st.chat_input("Ask a question...")
                         
                         if prompt:
                             st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
@@ -631,30 +617,30 @@ else:
                                 st.markdown(prompt)
                                 
                             with st.chat_message("assistant"):
-                                with st.spinner("Processing node parameters..."):
+                                with st.spinner("Processing..."):
                                     chat = model.start_chat(history=st.session_state.chat_history[:-1])
                                     response = chat.send_message(prompt)
                                     st.markdown(response.text)
                                     st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
                                     
-                        if st.button("🗑️ Wipe Memory"):
+                        if st.button("🗑️ Clear Chat"):
                             st.session_state.chat_history = []
                             st.rerun()
 
                     except Exception as e:
-                        st.error(f"❌ Connection Severed: {e}")
+                        st.error(f"❌ Connection Error: {e}")
                         if st.button("Reset Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
 
         elif menu == "📜 Analytics History":
-            st.title("📜 Deep Analytics & Logs")
+            st.title("📜 Analytics & Logs")
             view_type = st.radio("Select Database Log:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Parties"] + [p['party_name'] for p in party_list]
-                sel_history_p = st.selectbox("🔍 Isolate Node (Party Name)", p_names, key="hist_chal")
+                sel_history_p = st.selectbox("🔍 Filter by Party", p_names, key="hist_chal")
 
                 if sel_history_p == "All Parties":
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
@@ -666,7 +652,7 @@ else:
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['challan_date'], format='%d/%m/%Y', errors='coerce')
                     
-                    st.markdown(f"### 📈 Data Node: {sel_history_p}")
+                    st.markdown(f"### 📈 Data: {sel_history_p}")
                     c1, c2 = st.columns(2)
                     c1.metric("🧾 Total Transactions", f"{len(df)}")
                     c2.metric("💰 Value Processed", f"₹ {df['clean_amt'].sum():,.2f}")
@@ -680,7 +666,7 @@ else:
                         st.bar_chart(chart_data)
                     
                     st.markdown("---")
-                    st.write("**Blockchain Ledger (Recent):**")
+                    st.write("**Recent Ledger:**")
 
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
                     for c in data[:50]:
@@ -694,7 +680,7 @@ else:
             else:
                 party_list = fetch_data("SELECT DISTINCT bill_to_name FROM tax_invoices WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Parties"] + [p['bill_to_name'] for p in party_list]
-                sel_history_p = st.selectbox("🔍 Isolate Node (Party Name)", p_names, key="hist_inv")
+                sel_history_p = st.selectbox("🔍 Filter by Party", p_names, key="hist_inv")
 
                 if sel_history_p == "All Parties":
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
@@ -706,7 +692,7 @@ else:
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['invoice_date'], format='%d/%m/%Y', errors='coerce')
                     
-                    st.markdown(f"### 📈 Data Node: {sel_history_p}")
+                    st.markdown(f"### 📈 Data: {sel_history_p}")
                     c1, c2 = st.columns(2)
                     c1.metric("🧾 Total Transactions", f"{len(df)}")
                     c2.metric("💰 Value Processed", f"₹ {df['clean_amt'].sum():,.2f}")
@@ -720,7 +706,7 @@ else:
                         st.bar_chart(chart_data)
                         
                     st.markdown("---")
-                    st.write("**Blockchain Ledger (Recent):**")
+                    st.write("**Recent Ledger:**")
 
                     h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
                     for c in data[:50]:
@@ -734,12 +720,12 @@ else:
 
         elif menu == "🗑️ Recycle Bin":
             st.title("🗑️ System Purge Container")
-            view_type = st.radio("Select Core:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            view_type = st.radio("Select Log:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 data = fetch_data("SELECT id, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
-                    if st.button("🚨 Purge Sector Permanently", type="primary"):
+                    if st.button("🚨 Purge Permanently", type="primary"):
                         execute_data("DELETE FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                         st.rerun()
                     st.markdown("---")
@@ -747,12 +733,12 @@ else:
                         c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['challan_no']); c2.write(c['party_name']); c3.write(c['amount'])
                         if c4.button("🔄 Recover", key=f"rc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
-                        if c5.button("❌ Annihilate", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("Sector Secure. No anomalies found.")
+                        if c5.button("❌ Delete", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Bin is empty.")
             else:
                 data = fetch_data("SELECT id, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
-                    if st.button("🚨 Purge Sector Permanently", type="primary"):
+                    if st.button("🚨 Purge Permanently", type="primary"):
                         execute_data("DELETE FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                         st.rerun()
                     st.markdown("---")
@@ -760,8 +746,8 @@ else:
                         c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['invoice_no']); c2.write(c['bill_to_name']); c3.write(c['amount'])
                         if c4.button("🔄 Recover", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
-                        if c5.button("❌ Annihilate", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("Sector Secure. No anomalies found.")
+                        if c5.button("❌ Delete", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Bin is empty.")
 
         elif menu == "📄 Tax Invoice":
             st.title("📄 Tax Invoice Engine")
@@ -904,7 +890,7 @@ else:
                     if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
                     else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
-                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; background:white;} .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px; color:black;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; color:black;} .header-right { position: absolute; top: 10px; right: 10px; text-align: right; color:black;} table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; color:black;} .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
+                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; background:white;} .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px; color:black;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; color:black;} .header-right { position: absolute; top: 10px; right: 10px; text-align: right; color:black;} table { width: 100%; border-collapse: collapse; color:black;} td, th { border: 1px solid #000; padding: 6px; vertical-align: top; color:black;} .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
                     html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
                     html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
