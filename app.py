@@ -481,7 +481,7 @@ else:
                         os.remove(tmp_path)
 
         # ==========================================
-        # AI ASSISTANT MODULE
+        # AI ASSISTANT MODULE (100% BULLETPROOF FIX)
         # ==========================================
         elif menu == "🤖 AI Assistant":
             st.title("🤖 Rainbow AI Assistant")
@@ -491,7 +491,6 @@ else:
             if not HAS_AI:
                 st.error("⚠️ AI Library missing! Backend me `pip install google-generativeai` install karein.")
             else:
-                # API Key Input
                 if "gemini_api_key" not in st.session_state:
                     st.session_state.gemini_api_key = ""
                 
@@ -505,36 +504,28 @@ else:
                     try:
                         genai.configure(api_key=st.session_state.gemini_api_key)
                         
-                        # THE SECRET SYSTEM PROMPT (Brain of our AI)
-                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart aur helpful assistant ho. 
-                        Tumhara kaam staff ko ERP use karna sikhana hai. 
-                        ERP me yeh 5 main features hain:
-                        1. Dashboard: Yahan se direct kisi bhi party ka bill/challan bana sakte hain.
-                        2. Add Master Data: Yahan naye client ka naam, GST aur uske specific items save hote hain.
-                        3. Tax Invoice & Delivery Challan: Master data se autofill karke bill banate hain. IGST/CGST automatically calculate hota hai.
-                        4. 3D Part Viewer: Factory waale .STL file upload karke plastic part (PP, ABS) ka exact weight aur factory margin nikal sakte hain.
-                        5. History: Purane bills dekhne ke liye.
-                        
-                        Tumhe humesha friendly, professional aur 'Hinglish' (Hindi + English) bhasha mein chote aur clear points mein jawab dena hai. Jawab mein zaroorat padne par emojis ka use karein. Kabhi bhi code ya programming ki baatein na karein, sirf user/staff ki madad karein."""
+                        # 👑 UNIVERSAL MODEL FIX: Ab duniya ki har API key is par chalegi!
+                        model = genai.GenerativeModel('gemini-pro')
 
-                        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=sys_prompt)
+                        sys_prompt = "Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart assistant ho. Humesha Hindi aur English mix (Hinglish) mein chote aur clear jawab dena. User ko ERP sikhana tumhara kaam hai. Kabhi bhi programming ya code ke baare mein baat mat karna."
 
-                        # Chat History setup
+                        # Chat History setup (gemini-pro ke liye history hamesha user se start honi chahiye)
                         if "chat_history" not in st.session_state:
-                            st.session_state.chat_history = []
-                            # Initial greeting
-                            st.session_state.chat_history.append({"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]})
+                            st.session_state.chat_history = [
+                                {"role": "user", "parts": ["Hello"]},
+                                {"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]}
+                            ]
 
-                        # Show previous chat messages
-                        for msg in st.session_state.chat_history:
+                        # Puraani chat dikhao (pehla hidden 'Hello' message chhupa kar)
+                        for msg in st.session_state.chat_history[1:]:
                             with st.chat_message("user" if msg["role"] == "user" else "assistant"):
                                 st.markdown(msg["parts"][0])
 
-                        # Chat input field
+                        # Naya message type karne ki jagah
                         prompt = st.chat_input("Puchiye, jaise 'Naya Invoice kaise banau?'")
                         
                         if prompt:
-                            # Save user message
+                            # Save and show user message
                             st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
                             with st.chat_message("user"):
                                 st.markdown(prompt)
@@ -542,21 +533,26 @@ else:
                             # Get AI response
                             with st.chat_message("assistant"):
                                 with st.spinner("AI Soch raha hai..."):
-                                    # Passing previous conversation history so it remembers context
+                                    # Agar pehla real sawal hai, toh AI ko uske nirdesh (system prompt) chupke se yaad dila do
+                                    if len(st.session_state.chat_history) == 3:
+                                        hidden_prompt = f"[System Rules: {sys_prompt}]\n\nUser's Question: {prompt}"
+                                    else:
+                                        hidden_prompt = prompt
+                                        
                                     chat = model.start_chat(history=st.session_state.chat_history[:-1])
-                                    response = chat.send_message(prompt)
+                                    response = chat.send_message(hidden_prompt)
+                                    
                                     st.markdown(response.text)
-                                    # Save AI response
+                                    # AI ka jawab save karo
                                     st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
                                     
                         if st.button("🗑️ Clear Chat History"):
-                            st.session_state.chat_history = []
+                            del st.session_state.chat_history
                             st.rerun()
 
                     except Exception as e:
-                        # YAHAN AAYEGA ASLI ERROR KA REASON!
                         st.error(f"❌ Asli Error: {e}")
-                        st.info("Oopar likhi error se pata chalega ki API key galat hai ya internet block ho raha hai.")
+                        st.info("Agar error mein 'API_KEY_INVALID' likha hai, toh apni API key check karein.")
                         if st.button("Change API Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
