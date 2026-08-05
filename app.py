@@ -156,16 +156,32 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
-# 2. SESSION & AUTH MANAGER
+# 2. SESSION & AUTH MANAGER (WITH ANTI-LOGOUT SYNC)
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager")
-time.sleep(0.1)
+
+if "cookies_synced" not in st.session_state:
+    st.session_state.cookies_synced = True
+    st.markdown('''
+        <div style="text-align:center; padding: 50px;">
+            <h2 style="color: #1a4f8b;">🔄 Synchronizing Secure Session...</h2>
+            <p style="color: #64748b;">Please wait a moment while we verify your credentials.</p>
+        </div>
+    ''', unsafe_allow_html=True)
+    time.sleep(1)
+    st.rerun()
 
 if "auth_logged_in" not in st.session_state:
-    try: 
-        if cookie_manager.get(cookie="rainbow_erp_auth") == "verified":
-            st.session_state.update({"auth_logged_in": True, "auth_role": cookie_manager.get(cookie="rainbow_user_role"), "auth_name": cookie_manager.get(cookie="rainbow_user_name"), "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")})
-    except: st.session_state.auth_logged_in = False
+    auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
+    if auth_status == "verified":
+        st.session_state.update({
+            "auth_logged_in": True, 
+            "auth_role": cookie_manager.get(cookie="rainbow_user_role"), 
+            "auth_name": cookie_manager.get(cookie="rainbow_user_name"), 
+            "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")
+        })
+    else:
+        st.session_state.auth_logged_in = False
 
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
@@ -277,14 +293,23 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
 # ==========================================
 if not st.session_state.get("auth_logged_in"):
     st.title("☁️ System Logon")
-    u = st.text_input("User ID"); p = st.text_input("Password", type="password")
+    u = st.text_input("User ID")
+    p = st.text_input("Password", type="password")
     if st.button("Authenticate"):
-        user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
-        if user:
-            st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
-            cookie_manager.set("rainbow_erp_auth", "verified"); cookie_manager.set("rainbow_user_role", user[0]['role']); cookie_manager.set("rainbow_user_name", user[0]['name']); cookie_manager.set("rainbow_user_uid", user[0]['uid'])
-            time.sleep(0.5); st.rerun()
-        else: st.error("❌ Invalid Credentials. Please try again.")
+        # 🚨 STRICT BLANK FIELD VALIDATION 🚨
+        if u.strip() == "" or p.strip() == "":
+            st.warning("⚠️ Please enter both User ID and Password!")
+        else:
+            user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
+            if user:
+                st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
+                cookie_manager.set("rainbow_erp_auth", "verified")
+                cookie_manager.set("rainbow_user_role", user[0]['role'])
+                cookie_manager.set("rainbow_user_name", user[0]['name'])
+                cookie_manager.set("rainbow_user_uid", user[0]['uid'])
+                time.sleep(0.5); st.rerun()
+            else: 
+                st.error("❌ Invalid Credentials. Please try again.")
 else:
     if not st.session_state.get('auth_role'):
         st.session_state['auth_logged_in'] = False
