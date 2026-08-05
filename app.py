@@ -30,17 +30,31 @@ except ImportError:
 st.set_page_config(page_title="Rainbow ERP - Enterprise", layout="wide")
 
 # ==========================================
-# 0. POP-UP DIALOG CONFIGURATION
+# 0. POP-UP DIALOG CONFIGURATION (REVIEW SYSTEM)
 # ==========================================
 if hasattr(st, 'dialog'):
+    @st.dialog("Final Submission Confirmation")
+    def confirm_save_dialog(doc_type, trigger_key):
+        st.markdown(f"Do you want to finally save this **{doc_type}** or want to review before final submission?")
+        st.markdown("<br>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        if c1.button("Review", use_container_width=True):
+            st.rerun()
+        if c2.button("Save", type="primary", use_container_width=True):
+            st.session_state[trigger_key] = True
+            st.rerun()
+
     @st.dialog("⚠️ Validation Error")
     def display_validation_error(missing_list):
         st.error("Document generation aborted. Please complete the following mandatory fields:")
         for item in missing_list:
             st.markdown(f"- **{item}**")
 else:
+    def confirm_save_dialog(doc_type, trigger_key):
+        st.session_state[trigger_key] = True
+        st.rerun()
+
     def display_validation_error(missing_list):
-        st.toast("Validation Failed! Missing mandatory fields.", icon="❌")
         st.error("Document generation aborted. Please complete the following mandatory fields:")
         for item in missing_list:
             st.markdown(f"- **{item}**")
@@ -156,7 +170,7 @@ if "auth_logged_in" not in st.session_state:
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
 # ==========================================
-# 3. HTML GENERATOR FOR TAX INVOICE
+# 3. HTML GENERATOR FOR DOCUMENTS
 # ==========================================
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
@@ -296,7 +310,7 @@ else:
         st.title("👑 Administration Dashboard")
         all_users = fetch_data("SELECT * FROM users")
         total_clients = sum(1 for u in all_users if u['role'] == 'customer')
-        m1, m2 = st.columns(2); m1.metric("Total Clients", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
+        m1, m2 = st.columns(2); m1.metric("Active Tenants", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
         with st.form("create_user_form", clear_on_submit=True):
             new_uid = st.text_input("Username / Login ID")
@@ -381,7 +395,7 @@ else:
                         else: st.error("Please complete all mandatory fields marked with (*).")
 
             with c2:
-                st.subheader("📦 Add Partner Materials")
+                st.subheader("📦 Map Partner Materials")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
                 if not saved_parties:
@@ -515,7 +529,7 @@ else:
                     st.session_state.gemini_api_key = ""
                 
                 if not st.session_state.gemini_api_key:
-                    st.info("💡 A valid Google Gemini API Key is required to initialize the neural link. (Available via Google AI Studio)")
+                    st.info("💡 A valid Google Gemini API Key is required to initialize the neural link.")
                     api_input = st.text_input("Enter Execution Key:", type="password")
                     if st.button("Establish Neural Link"):
                         st.session_state.gemini_api_key = api_input
@@ -526,13 +540,6 @@ else:
                         
                         sys_prompt = """You are 'Rainbow AI', an intelligent assistant for Rainbow ERP.
                         Your objective is to guide users on how to operate the ERP system.
-                        ERP Features:
-                        1. Dashboard: Direct document generation for registered partners.
-                        2. Master Data: Register partners, GSTINs, and map specific materials/rates.
-                        3. Tax Invoice & Challan: Auto-filled document generation with automatic IGST/CGST calculations.
-                        4. 3D Viewer: Upload .STL/.OBJ files to calculate part weights and configurable scrap margins.
-                        5. History: View analytics and download historical documents.
-                        
                         CRITICAL INSTRUCTION: You are capable of understanding and communicating in ANY language the user prefers (including Hinglish, Hindi, English, etc.). Adapt your language to match the user's prompt perfectly while keeping the tone professional. Use bullet points and appropriate emojis. Do not output raw code."""
 
                         model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=sys_prompt)
@@ -565,7 +572,6 @@ else:
 
                     except Exception as e:
                         st.error(f"❌ Connection Exception: {e}")
-                        st.info("If you encounter an error, your API key might be invalid or unverified.")
                         if st.button("Reconfigure API Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
@@ -656,7 +662,7 @@ else:
                 else: st.info("No active logs found for these parameters.")
 
         elif menu == "🗑️ Recycle Bin":
-            st.title("🗑️ Security Purge Container")
+            st.title("🗑️ Security Archive")
             view_type = st.radio("Select Archive View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
@@ -851,6 +857,48 @@ else:
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
+                if st.session_state.get('trigger_save_inv', False):
+                    # SECURE SAVE EXECUTION (Triggered after confirmation)
+                    total_before = sum(item['amount'] for item in items_data)
+                    cgst = total_before * 0.09 if tax_mode == "CGST" else 0
+                    sgst = total_before * 0.09 if tax_mode == "CGST" else 0
+                    igst = total_before * 0.18 if tax_mode == "IGST" else 0
+                    total_tax = cgst + sgst + igst
+                    total_after = total_before + total_tax
+                    amt_words = num2words(total_after, lang='en_IN').title() + " Only."
+                    items_json = json.dumps(items_data)
+
+                    current_fd = {
+                        'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'), 'eway_bill_no': eway_bill_no,
+                        'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
+                        'transport_mode': transport_mode, 'vehicle_no': vehicle_no,
+                        'date_of_supply': date_of_supply, 'place_of_supply': place_of_supply,
+                        'bill_to_name': b_name, 'bill_to_address': b_add, 'bill_to_gstin': b_gst,
+                        'bill_to_state': b_state, 'bill_to_state_code': b_scode,
+                        'ship_to_name': s_name, 'ship_to_address': s_add, 'ship_to_gstin': s_gst,
+                        'ship_to_state': s_state, 'ship_to_state_code': s_scode
+                    }
+
+                    if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
+                    else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
+
+                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
+                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
+                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
+                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
+                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
+
+                    full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
+                    full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
+                    
+                    st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
+                    st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
+                    st.session_state['inv_no'] = invoice_no
+                    st.session_state['inv_amt'] = f"₹{total_after:.2f}"
+                    
+                    st.session_state.trigger_save_inv = False
+                    st.rerun()
+
                 if st.button("🚀 Finalize & Compile PDF Document", type="primary"):
                     # 🔴 POPUP VALIDATION TRIGGER
                     req_fields = {
@@ -871,43 +919,7 @@ else:
                     if missing:
                         display_validation_error(missing)
                     else:
-                        total_before = sum(item['amount'] for item in items_data)
-                        cgst = total_before * 0.09 if tax_mode == "CGST" else 0
-                        sgst = total_before * 0.09 if tax_mode == "CGST" else 0
-                        igst = total_before * 0.18 if tax_mode == "IGST" else 0
-                        total_tax = cgst + sgst + igst
-                        total_after = total_before + total_tax
-                        amt_words = num2words(total_after, lang='en_IN').title() + " Only."
-                        items_json = json.dumps(items_data)
-
-                        current_fd = {
-                            'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'), 'eway_bill_no': eway_bill_no,
-                            'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
-                            'transport_mode': transport_mode, 'vehicle_no': vehicle_no,
-                            'date_of_supply': date_of_supply, 'place_of_supply': place_of_supply,
-                            'bill_to_name': b_name, 'bill_to_address': b_add, 'bill_to_gstin': b_gst,
-                            'bill_to_state': b_state, 'bill_to_state_code': b_scode,
-                            'ship_to_name': s_name, 'ship_to_address': s_add, 'ship_to_gstin': s_gst,
-                            'ship_to_state': s_state, 'ship_to_state_code': s_scode
-                        }
-
-                        if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
-                        else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
-
-                        base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
-                        html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
-                        html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
-                        html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
-                        html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
-
-                        full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
-                        full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
-                        
-                        st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
-                        st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
-                        st.session_state['inv_no'] = invoice_no
-                        st.session_state['inv_amt'] = f"₹{total_after:.2f}"
-                        st.rerun()
+                        confirm_save_dialog("Tax Invoice", "trigger_save_inv")
 
         # ==========================================
         # DELIVERY CHALLAN ENGINE
@@ -1032,23 +1044,17 @@ else:
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
-            if st.button("🚀 Finalize & Compile Dispatch Document", type="primary", key="save_print_btn"):
-                # 🔴 POPUP VALIDATION TRIGGER
-                req_fields = {
-                    "Dispatch To Name": party_name, "Registered Address": party_address,
-                    "GSTIN Reference": party_gstin, "State Region": party_state, "Regional Code": party_state_code,
-                    "Place of Supply": place_of_supply, "Challan No.": challan_no,
-                    "Vehicle No.": vehicle_no, "Transport Mode": transport_mode, "Date & Time of Supply": date_of_supply
-                }
-                missing = [k for k, v in req_fields.items() if not str(v).strip()]
+            if 'pdf_chal' in st.session_state:
+                st.success("✅ Commercial Document Successfully Generated.")
+                c_dl, c_wa = st.columns([2, 2])
+                c_dl.download_button(label="📄 Export Complete Document", data=st.session_state['pdf_chal'], file_name=f"Challan_{st.session_state.get('chal_no', 'New')}.pdf", mime="application/pdf", type="primary")
                 
-                invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
-                if invalid_items:
-                    missing.append(f"Incomplete Material Sequence (Description, HSN, Box, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
-
-                if missing:
-                    display_validation_error(missing)
-                else:
+                wa_msg = f"Hello {st.session_state.get('chal_party', 'Sir/Madam')},%0A%0AHere are your official dispatch details from *{my_company['name']}*:%0A*Challan No:* {st.session_state.get('chal_no')}%0A*Vehicle No:* {st.session_state.get('chal_vehicle')}%0A*Total Amount:* {st.session_state.get('chal_amt')}%0A%0AWe appreciate your business!"
+                wa_link = f"https://wa.me/?text={wa_msg}"
+                c_wa.link_button("📲 Forward via WhatsApp", wa_link)
+            else:
+                if st.session_state.get('trigger_save_chal', False):
+                    # SECURE SAVE EXECUTION (Triggered after confirmation)
                     total_before = sum(item['amount'] for item in items_data)
                     total_tax = (total_before * 0.09) + (total_before * 0.09)
                     total_after = total_before + total_tax
@@ -1119,11 +1125,30 @@ else:
                     </body></html>"""
                     
                     pdf_c = HTML(string=html_content).write_pdf()
+                    st.session_state['pdf_chal'] = pdf_c
+                    st.session_state['chal_no'] = challan_no if challan_no else 'New'
+                    st.session_state['chal_party'] = party_name
+                    st.session_state['chal_vehicle'] = vehicle_no
+                    st.session_state['chal_amt'] = f"₹{total_after:.2f}"
                     
-                    st.success("✅ Commercial Document Successfully Generated.")
-                    c_dl, c_wa = st.columns([2, 2])
-                    c_dl.download_button(label="📄 Export Complete Document", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
+                    st.session_state.trigger_save_chal = False
+                    st.rerun()
+
+                if st.button("🚀 Finalize & Compile Dispatch Document", type="primary", key="save_print_btn"):
+                    # 🔴 POPUP VALIDATION TRIGGER
+                    req_fields = {
+                        "Dispatch To Name": party_name, "Registered Address": party_address,
+                        "GSTIN Reference": party_gstin, "State Region": party_state, "Regional Code": party_state_code,
+                        "Place of Supply": place_of_supply, "Challan No.": challan_no,
+                        "Vehicle No.": vehicle_no, "Transport Mode": transport_mode, "Date & Time of Supply": date_of_supply
+                    }
+                    missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    wa_msg = f"Hello {party_name},%0A%0AHere are your official dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Total Amount:* ₹{total_after:.2f}%0A%0AWe appreciate your business!"
-                    wa_link = f"https://wa.me/?text={wa_msg}"
-                    c_wa.link_button("📲 Forward via WhatsApp", wa_link)
+                    invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
+                    if invalid_items:
+                        missing.append(f"Incomplete Material Sequence (Description, HSN, Box, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
+
+                    if missing:
+                        display_validation_error(missing)
+                    else:
+                        confirm_save_dialog("Delivery Challan", "trigger_save_chal")
