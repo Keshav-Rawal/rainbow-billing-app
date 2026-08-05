@@ -156,32 +156,16 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
-# 2. SESSION & AUTH MANAGER (ANTI-LOGOUT FIX)
+# 2. SESSION & AUTH MANAGER
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager")
-
-# Magic fix: Stop execution for 1 cycle on hard refresh to allow browser to send cookies back
-if "cookies_synced" not in st.session_state:
-    st.session_state.cookies_synced = True
-    st.markdown('''
-        <div style="text-align:center; padding: 50px;">
-            <h2 style="color: #1a4f8b;">🔄 Synchronizing Secure Session...</h2>
-            <p style="color: #64748b;">Please wait a moment while we verify your credentials.</p>
-        </div>
-    ''', unsafe_allow_html=True)
-    st.stop() # This pauses python, lets browser load cookies, and then automatically reruns!
+time.sleep(0.1)
 
 if "auth_logged_in" not in st.session_state:
-    auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
-    if auth_status == "verified":
-        st.session_state.update({
-            "auth_logged_in": True, 
-            "auth_role": cookie_manager.get(cookie="rainbow_user_role"), 
-            "auth_name": cookie_manager.get(cookie="rainbow_user_name"), 
-            "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")
-        })
-    else:
-        st.session_state.auth_logged_in = False
+    try: 
+        if cookie_manager.get(cookie="rainbow_erp_auth") == "verified":
+            st.session_state.update({"auth_logged_in": True, "auth_role": cookie_manager.get(cookie="rainbow_user_role"), "auth_name": cookie_manager.get(cookie="rainbow_user_name"), "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")})
+    except: st.session_state.auth_logged_in = False
 
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
@@ -411,7 +395,7 @@ else:
                         else: st.error("Please complete all mandatory fields marked with (*).")
 
             with c2:
-                st.subheader("📦 Add Partner Materials")
+                st.subheader("📦 Map Partner Materials")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
                 if not saved_parties:
