@@ -329,14 +329,14 @@ else:
 
         elif menu == "⚙️ Company Profile":
             st.title("⚙️ Dynamic Company Profile")
-            c_name = st.text_input("Company/Factory Name", value=my_company["name"], key="c_name")
+            c_name = st.text_input("Company/Factory Name *", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
-            c_gst = st.text_input("GSTIN Number", value=my_company["gstin"], key="c_gst")
-            c_address = st.text_area("Registered Address", value=my_company["address"], key="c_address")
-            c_state = st.text_input("State", value=my_company["state"], key="c_state")
-            c_scode = st.text_input("State Code", value=my_company["state_code"], key="c_scode")
-            c_contact = st.text_input("Contact Lines", value=my_company.get("contact", ""), key="c_contact")
-            c_manu = st.text_input("Business Scope", value=my_company.get("manufacturing", ""), key="c_manu")
+            c_gst = st.text_input("GSTIN Number *", value=my_company["gstin"], key="c_gst")
+            c_address = st.text_area("Registered Address *", value=my_company["address"], key="c_address")
+            c_state = st.text_input("State *", value=my_company["state"], key="c_state")
+            c_scode = st.text_input("State Code *", value=my_company["state_code"], key="c_scode")
+            c_contact = st.text_input("Contact Lines *", value=my_company.get("contact", ""), key="c_contact")
+            c_manu = st.text_input("Business Scope *", value=my_company.get("manufacturing", ""), key="c_manu")
             if st.button("💾 Save Profile", type="primary"):
                 execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu))
                 st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
@@ -350,15 +350,15 @@ else:
                 with st.form("p_m", clear_on_submit=True):
                     pn = st.text_input("Party Name *")
                     pa = st.text_area("Address *")
-                    pg = st.text_input("GSTIN")
-                    ps = st.text_input("State")
-                    pc = st.text_input("State Code")
-                    ppos = st.text_input("Place of Supply (City/State)")
+                    pg = st.text_input("GSTIN *")
+                    ps = st.text_input("State *")
+                    pc = st.text_input("State Code *")
+                    ppos = st.text_input("Place of Supply (City/State) *")
                     if st.form_submit_button("Save Party"):
-                        if pn and pa:
+                        if pn and pa and pg and ps and pc:
                             execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
                             st.success(f"Party '{pn}' Saved Successfully!")
-                        else: st.error("Name and Address are required!")
+                        else: st.error("Lal sitaare (*) waale sabhi fields bharna zaroori hai!")
 
             with c2:
                 st.subheader("📦 Add Items specific to a Party")
@@ -370,14 +370,14 @@ else:
                     with st.form("i_m", clear_on_submit=True):
                         linked_party = st.selectbox("Select Party for this Item *", saved_parties)
                         idsc = st.text_input("Item Description *")
-                        ihsn = st.text_input("HSN Code")
-                        irate = st.number_input("Default Rate (₹)", min_value=0.0, step=1.0)
+                        ihsn = st.text_input("HSN Code *")
+                        irate = st.number_input("Default Rate (₹) *", min_value=0.0, step=1.0)
                         
                         if st.form_submit_button("Save Item for this Party"):
-                            if idsc:
+                            if idsc and ihsn:
                                 execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code, rate) VALUES (%s, %s, %s, %s, %s)", (uid, linked_party, idsc, ihsn, irate))
                                 st.success(f"Item saved specifically for {linked_party}!")
-                            else: st.error("Item Description is required!")
+                            else: st.error("Item Description aur HSN zaroori hai!")
                 
                 saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code, rate FROM item_master WHERE uid=%s", (uid,))
                 if saved_items:
@@ -481,7 +481,7 @@ else:
                         os.remove(tmp_path)
 
         # ==========================================
-        # AI ASSISTANT MODULE (LATEST MODEL 2.5 FIX)
+        # AI ASSISTANT MODULE
         # ==========================================
         elif menu == "🤖 AI Assistant":
             st.title("🤖 Rainbow AI Assistant")
@@ -515,20 +515,16 @@ else:
                         
                         Tumhe humesha friendly, professional aur 'Hinglish' (Hindi + English) bhasha mein chote aur clear points mein jawab dena hai. Jawab mein zaroorat padne par emojis ka use karein. Kabhi bhi code ya programming ki baatein na karein, sirf user/staff ki madad karein."""
 
-                        # 👑 LATEST GOOGLE MODEL FIX: gemini-2.5-flash
                         model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=sys_prompt)
 
-                        # Chat History setup
                         if "chat_history" not in st.session_state:
                             st.session_state.chat_history = []
                             st.session_state.chat_history.append({"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]})
 
-                        # Show previous chat messages
                         for msg in st.session_state.chat_history:
                             with st.chat_message("user" if msg["role"] == "user" else "assistant"):
                                 st.markdown(msg["parts"][0])
 
-                        # Chat input field
                         prompt = st.chat_input("Puchiye, jaise 'Naya Invoice kaise banau?'")
                         
                         if prompt:
@@ -713,17 +709,17 @@ else:
 
             with st.expander("📌 Invoice & Transport Details", expanded=True):
                 c1, c2, c3, c4, c5_ew = st.columns([2, 2, 2, 2, 2])
-                invoice_no = c1.text_input("Invoice No.", value=def_inv_no)
-                invoice_date = c2.date_input("Invoice Date", parse_date(fd.get('invoice_date')))
+                invoice_no = c1.text_input("Invoice No. *", value=def_inv_no)
+                invoice_date = c2.date_input("Invoice Date *", parse_date(fd.get('invoice_date')))
                 eway_bill_no = c5_ew.text_input("E-Way Bill No. (Optional)", fd.get('eway_bill_no',''))
-                vendor_code = c3.text_input("Vendor Code", fd.get('vendor_code',''))
-                po_no = c4.text_input("P.O. No.", fd.get('po_no',''))
+                vendor_code = c3.text_input("Vendor Code (Optional)", fd.get('vendor_code',''))
+                po_no = c4.text_input("P.O. No. (Optional)", fd.get('po_no',''))
                 
                 c5, c6, c7, c8 = st.columns(4)
-                po_date = c5.date_input("P.O. Date", parse_date(fd.get('po_date')))
-                transport_mode = c6.text_input("Transport Mode", fd.get('transport_mode','Road'))
-                vehicle_no = c7.text_input("Vehicle No.", fd.get('vehicle_no',''))
-                date_of_supply = c8.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time))
+                po_date = c5.date_input("P.O. Date (Optional)", parse_date(fd.get('po_date')))
+                transport_mode = c6.text_input("Transport Mode *", fd.get('transport_mode','Road'))
+                vehicle_no = c7.text_input("Vehicle No. *", fd.get('vehicle_no',''))
+                date_of_supply = c8.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
 
             with st.expander("🏢 Parties Details", expanded=True):
                 col_b, col_s = st.columns(2)
@@ -746,13 +742,13 @@ else:
 
                     sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_inv_p_widget", on_change=autofill_inv_party)
                         
-                    b_name = st.text_input("Name", key="b1")
-                    b_add = st.text_area("Address", key="b2", height=68)
-                    b_gst = st.text_input("GSTIN", key="b3")
+                    b_name = st.text_input("Name *", key="b1")
+                    b_add = st.text_area("Address *", key="b2", height=68)
+                    b_gst = st.text_input("GSTIN *", key="b3")
                     c_st1, c_st2, c_st3 = st.columns(3)
-                    with c_st1: b_state = st.text_input("State", key="b4")
-                    with c_st2: b_scode = st.text_input("State Code", key="b5")
-                    with c_st3: place_of_supply = st.text_input("Place of Supply", key="pos_inv")
+                    with c_st1: b_state = st.text_input("State *", key="b4")
+                    with c_st2: b_scode = st.text_input("State Code *", key="b5")
+                    with c_st3: place_of_supply = st.text_input("Place of Supply *", key="pos_inv")
                 
                 with col_s:
                     st.markdown("**Shipped To Party:**")
@@ -772,11 +768,11 @@ else:
                         st.session_state.s4 = st.session_state.b4
                         st.session_state.s5 = st.session_state.b5
                     
-                    s_name = st.text_input("Name", key="s1", disabled=same_as)
-                    s_add = st.text_area("Address", key="s2", height=68, disabled=same_as)
-                    s_gst = st.text_input("GSTIN", key="s3", disabled=same_as)
-                    s_state = st.text_input("State", key="s4", disabled=same_as)
-                    s_scode = st.text_input("State Code", key="s5", disabled=same_as)
+                    s_name = st.text_input("Name *", key="s1", disabled=same_as)
+                    s_add = st.text_area("Address *", key="s2", height=68, disabled=same_as)
+                    s_gst = st.text_input("GSTIN *", key="s3", disabled=same_as)
+                    s_state = st.text_input("State *", key="s4", disabled=same_as)
+                    s_scode = st.text_input("State Code *", key="s5", disabled=same_as)
 
             st.subheader("📦 Item Details")
             if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
@@ -812,11 +808,11 @@ else:
                 sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
                 
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                with c1: desc = st.text_input("Description", key=f"id_{i}")
-                with c2: hsn = st.text_input("HSN Code", key=f"ih_{i}")
+                with c1: desc = st.text_input("Description *", key=f"id_{i}")
+                with c2: hsn = st.text_input("HSN Code *", key=f"ih_{i}")
                 with c3: boxes = st.text_input("Boxes", key=f"ib_{i}")
-                with c4: qty = st.number_input("Qty", min_value=0.0, key=f"iq_{i}")
-                with c5: rate = st.number_input("Rate (₹)", min_value=0.0, key=f"ir_{i}")
+                with c4: qty = st.number_input("Qty *", min_value=0.0, key=f"iq_{i}")
+                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, key=f"ir_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
@@ -834,43 +830,62 @@ else:
                 c_wa.link_button("📲 Send on WhatsApp", wa_link)
             else:
                 if st.button("🚀 Save & Generate Invoice PDF", type="primary"):
-                    total_before = sum(item['amount'] for item in items_data)
-                    cgst = total_before * 0.09 if tax_mode == "CGST" else 0
-                    sgst = total_before * 0.09 if tax_mode == "CGST" else 0
-                    igst = total_before * 0.18 if tax_mode == "IGST" else 0
-                    total_tax = cgst + sgst + igst
-                    total_after = total_before + total_tax
-                    amt_words = num2words(total_after, lang='en_IN').title() + " Only."
-                    items_json = json.dumps(items_data)
-
-                    current_fd = {
-                        'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'), 'eway_bill_no': eway_bill_no,
-                        'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
-                        'transport_mode': transport_mode, 'vehicle_no': vehicle_no,
-                        'date_of_supply': date_of_supply, 'place_of_supply': place_of_supply,
-                        'bill_to_name': b_name, 'bill_to_address': b_add, 'bill_to_gstin': b_gst,
-                        'bill_to_state': b_state, 'bill_to_state_code': b_scode,
-                        'ship_to_name': s_name, 'ship_to_address': s_add, 'ship_to_gstin': s_gst,
-                        'ship_to_state': s_state, 'ship_to_state_code': s_scode
+                    # 🔴 STRICT VALIDATION CHECK
+                    req_fields = {
+                        "Invoice No.": invoice_no, "Transport Mode": transport_mode, 
+                        "Vehicle No.": vehicle_no, "Date & Time of Supply": date_of_supply,
+                        "Place of Supply": place_of_supply, "Bill To Name": b_name, 
+                        "Bill To Address": b_add, "Bill To GSTIN": b_gst, 
+                        "Bill To State": b_state, "Bill To State Code": b_scode,
+                        "Ship To Name": s_name, "Ship To Address": s_add, 
+                        "Ship To GSTIN": s_gst, "Ship To State": s_state, "Ship To State Code": s_scode
                     }
-
-                    if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
-                    else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
-
-                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
-                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
-                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
-                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
-                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
-
-                    full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
-                    full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
+                    missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
-                    st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
-                    st.session_state['inv_no'] = invoice_no
-                    st.session_state['inv_amt'] = f"₹{total_after:.2f}"
-                    st.rerun()
+                    empty_item_rows = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip()]
+                    if empty_item_rows:
+                        missing.append(f"Item Description & HSN Code for Row(s): {', '.join(empty_item_rows)}")
+
+                    if missing:
+                        st.error(f"⚠️ Neeche diye gaye Mandatory (*) fields ko bharna zaroori hai:\n- " + "\n- ".join(missing))
+                    else:
+                        total_before = sum(item['amount'] for item in items_data)
+                        cgst = total_before * 0.09 if tax_mode == "CGST" else 0
+                        sgst = total_before * 0.09 if tax_mode == "CGST" else 0
+                        igst = total_before * 0.18 if tax_mode == "IGST" else 0
+                        total_tax = cgst + sgst + igst
+                        total_after = total_before + total_tax
+                        amt_words = num2words(total_after, lang='en_IN').title() + " Only."
+                        items_json = json.dumps(items_data)
+
+                        current_fd = {
+                            'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'), 'eway_bill_no': eway_bill_no,
+                            'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'),
+                            'transport_mode': transport_mode, 'vehicle_no': vehicle_no,
+                            'date_of_supply': date_of_supply, 'place_of_supply': place_of_supply,
+                            'bill_to_name': b_name, 'bill_to_address': b_add, 'bill_to_gstin': b_gst,
+                            'bill_to_state': b_state, 'bill_to_state_code': b_scode,
+                            'ship_to_name': s_name, 'ship_to_address': s_add, 'ship_to_gstin': s_gst,
+                            'ship_to_state': s_state, 'ship_to_state_code': s_scode
+                        }
+
+                        if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
+                        else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y'), b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
+
+                        base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
+                        html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
+                        html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
+                        html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
+                        html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
+
+                        full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
+                        full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
+                        
+                        st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
+                        st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
+                        st.session_state['inv_no'] = invoice_no
+                        st.session_state['inv_amt'] = f"₹{total_after:.2f}"
+                        st.rerun()
 
         # ==========================================
         # DELIVERY CHALLAN ENGINE
@@ -933,23 +948,23 @@ else:
                 
                 sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_chal_p_widget", on_change=autofill_chal_party)
                         
-                party_name = st.text_input("Dispatch To (Party Name)", key="p_name")
-                party_address = st.text_area("Party Address", key="p_add")
-                party_gstin = st.text_input("Party GSTIN", key="p_gst")
+                party_name = st.text_input("Dispatch To (Party Name) *", key="p_name")
+                party_address = st.text_area("Party Address *", key="p_add")
+                party_gstin = st.text_input("Party GSTIN *", key="p_gst")
                 
                 c_st1, c_st2, c_st3 = st.columns(3)
-                with c_st1: party_state = st.text_input("Party State", key="p_state")
-                with c_st2: party_state_code = st.text_input("State Code", key="p_scode")
-                with c_st3: place_of_supply = st.text_input("Place of Supply", key="pos_chal")
+                with c_st1: party_state = st.text_input("Party State *", key="p_state")
+                with c_st2: party_state_code = st.text_input("State Code *", key="p_scode")
+                with c_st3: place_of_supply = st.text_input("Place of Supply *", key="pos_chal")
                 
             with col2:
                 st.markdown("**Challan Details:**")
-                challan_no = st.text_input("Challan No.", value=def_chal_no, key="c_no")
+                challan_no = st.text_input("Challan No. *", value=def_chal_no, key="c_no")
                 eway_bill_no = st.text_input("E-Way Bill No. (Optional)", value=fd.get('eway_bill_no',''), key="ew_no")
-                vehicle_no = st.text_input("Vehicle No.", value=fd.get('vehicle_no', ''), key="v_no")
-                challan_date = st.date_input("Challan Date", parse_date(fd.get('challan_date')), key="c_date")
-                transport_mode = st.text_input("Transport Mode", value=fd.get('transport_mode', 'Road'), key="t_mode")
-                date_of_supply = st.text_input("Date & Time of Supply", value=fd.get('date_of_supply', def_date_time))
+                vehicle_no = st.text_input("Vehicle No. *", value=fd.get('vehicle_no', ''), key="v_no")
+                challan_date = st.date_input("Challan Date *", parse_date(fd.get('challan_date')), key="c_date")
+                transport_mode = st.text_input("Transport Mode *", value=fd.get('transport_mode', 'Road'), key="t_mode")
+                date_of_supply = st.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
 
             st.subheader("📦 Item Details")
             if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
@@ -985,87 +1000,103 @@ else:
                 sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
                 
                 c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
-                with c1: desc = st.text_input("Description", key=f"desc_{i}")
-                with c2: hsn = st.text_input("HSN Code", key=f"hsn_{i}")
+                with c1: desc = st.text_input("Description *", key=f"desc_{i}")
+                with c2: hsn = st.text_input("HSN Code *", key=f"hsn_{i}")
                 with c3: boxes = st.text_input("Boxes", key=f"box_{i}")
-                with c4: qty = st.number_input("Qty", min_value=0.0, key=f"qty_{i}")
-                with c5: rate = st.number_input("Rate (₹)", min_value=0.0, key=f"rate_{i}")
+                with c4: qty = st.number_input("Qty *", min_value=0.0, key=f"qty_{i}")
+                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, key=f"rate_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
             if st.button("🚀 Save & Print Challan", type="primary", key="save_print_btn"):
-                total_before = sum(item['amount'] for item in items_data)
-                total_tax = (total_before * 0.09) + (total_before * 0.09)
-                total_after = total_before + total_tax
-                amt_words = num2words(total_after, lang='en_IN').title() + " Only."
+                # 🔴 STRICT VALIDATION CHECK
+                req_fields = {
+                    "Dispatch To Name": party_name, "Party Address": party_address,
+                    "Party GSTIN": party_gstin, "Party State": party_state, "State Code": party_state_code,
+                    "Place of Supply": place_of_supply, "Challan No.": challan_no,
+                    "Vehicle No.": vehicle_no, "Transport Mode": transport_mode, "Date & Time of Supply": date_of_supply
+                }
+                missing = [k for k, v in req_fields.items() if not str(v).strip()]
                 
-                if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
-                else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, eway_bill_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
-                
-                items_html = ""
-                for idx, item in enumerate(items_data):
-                    qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
-                    items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
+                empty_item_rows = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip()]
+                if empty_item_rows:
+                    missing.append(f"Item Description & HSN Code for Row(s): {', '.join(empty_item_rows)}")
 
-                eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
+                if missing:
+                    st.error(f"⚠️ Neeche diye gaye Mandatory (*) fields ko bharna zaroori hai:\n- " + "\n- ".join(missing))
+                else:
+                    total_before = sum(item['amount'] for item in items_data)
+                    total_tax = (total_before * 0.09) + (total_before * 0.09)
+                    total_after = total_before + total_tax
+                    amt_words = num2words(total_after, lang='en_IN').title() + " Only."
+                    
+                    if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
+                    else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, eway_bill_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
+                    
+                    items_html = ""
+                    for idx, item in enumerate(items_data):
+                        qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
+                        items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
 
-                html_content = f"""
-                <!DOCTYPE html><html><head><style>
-                @page {{ size: A4; margin: 10mm 5mm; }} 
-                body {{ font-family: Arial, sans-serif; font-size: 12px; color: #1c2d42; }} 
-                .container {{ border: 2px solid #1c2d42; width: 100%; }} 
-                .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; }} 
-                .header h2 {{ margin: 0 0 5px 0; color: #1c2d42; font-size: 18px; text-decoration: underline; letter-spacing: 1.5px; font-weight: bold; text-transform: uppercase; }} 
-                .header h1 {{ margin: 5px 0; color: #1c2d42; font-size: 32px; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 900; }} 
-                .header p {{ margin: 3px 0; font-size: 12px; color: #1c2d42; }} 
-                .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #1c2d42; line-height: 1.5; }} 
-                table {{ width: 100%; border-collapse: collapse; }} 
-                td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }} 
-                .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }} 
-                .spacer-row td {{ height: 260px; border-top: none; border-bottom: none; }} 
-                .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; }} 
-                .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
-                </style></head>
-                <body>
-                    <div class="container">
-                        <div class="header">
-                            <div class="top-left-info"><strong>GSTIN:</strong> {my_company['gstin']}<br><strong>State:</strong> {my_company['state']}<br><strong>Code:</strong> {my_company['state_code']}</div>
-                            <h2>DELIVERY CHALLAN</h2><h1>{my_company['name']}</h1><p>{my_company['tagline']}</p><p>{my_company['address']}</p><p>{my_company['contact']}</p><p style="font-weight: bold; font-size: 13px; margin-top: 5px;">{my_company['manufacturing']}</p>
+                    eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
+
+                    html_content = f"""
+                    <!DOCTYPE html><html><head><style>
+                    @page {{ size: A4; margin: 10mm 5mm; }} 
+                    body {{ font-family: Arial, sans-serif; font-size: 12px; color: #1c2d42; }} 
+                    .container {{ border: 2px solid #1c2d42; width: 100%; }} 
+                    .header {{ text-align: center; border-bottom: 2px solid #1c2d42; padding: 15px 10px; background-color: #fcfcfc; position: relative; min-height: 110px; }} 
+                    .header h2 {{ margin: 0 0 5px 0; color: #1c2d42; font-size: 18px; text-decoration: underline; letter-spacing: 1.5px; font-weight: bold; text-transform: uppercase; }} 
+                    .header h1 {{ margin: 5px 0; color: #1c2d42; font-size: 32px; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 900; }} 
+                    .header p {{ margin: 3px 0; font-size: 12px; color: #1c2d42; }} 
+                    .top-left-info {{ position: absolute; top: 15px; left: 15px; text-align: left; font-size: 12px; color: #1c2d42; line-height: 1.5; }} 
+                    table {{ width: 100%; border-collapse: collapse; }} 
+                    td, th {{ border: 1px solid #aeb6bf; padding: 6px; vertical-align: top; }} 
+                    .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }} 
+                    .spacer-row td {{ height: 260px; border-top: none; border-bottom: none; }} 
+                    .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; }} 
+                    .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
+                    </style></head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <div class="top-left-info"><strong>GSTIN:</strong> {my_company['gstin']}<br><strong>State:</strong> {my_company['state']}<br><strong>Code:</strong> {my_company['state_code']}</div>
+                                <h2>DELIVERY CHALLAN</h2><h1>{my_company['name']}</h1><p>{my_company['tagline']}</p><p>{my_company['address']}</p><p>{my_company['contact']}</p><p style="font-weight: bold; font-size: 13px; margin-top: 5px;">{my_company['manufacturing']}</p>
+                            </div>
+                            <table>
+                                <tr>
+                                    <td style="width: 50%; border-right: 2px solid #1c2d42;"><strong>Dispatch To:</strong><br><strong>{party_name}</strong><br>{party_address.replace(chr(10), '<br>')}<br><strong>GSTIN:</strong> {party_gstin}<br><strong>State:</strong> {party_state} &nbsp;&nbsp;&nbsp; <strong>Code:</strong> {party_state_code}</td>
+                                    <td style="width: 50%; padding: 0;">
+                                        <table style="border:none; width: 100%;">
+                                            <tr><td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td><td style="border:none; border-left: 1px solid #aeb6bf; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td></tr>
+                                            <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td></tr>
+                                            <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
+                                            {eway_row}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table class="items-table">
+                                <tr><th style="width:5%;">S.No</th><th style="width:35%;">Product Description</th><th style="width:10%;">HSN Code</th><th style="width:10%;">No of Box</th><th style="width:10%;">Total Qty</th><th style="width:12%;">Approx. Rate</th><th style="width:18%;">Approx. Amount</th></tr>
+                                {items_html}<tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                            </table>
+                            <table style="border-top: 2px solid #1c2d42;">
+                                <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:20%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:20%; text-align:right;">{total_before:.2f}</td></tr>
+                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
+                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
+                                <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
+                                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_after:.2f}</td></tr>
+                            </table>
+                            <div class="footer"><p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p><div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div></div>
                         </div>
-                        <table>
-                            <tr>
-                                <td style="width: 50%; border-right: 2px solid #1c2d42;"><strong>Dispatch To:</strong><br><strong>{party_name}</strong><br>{party_address.replace(chr(10), '<br>')}<br><strong>GSTIN:</strong> {party_gstin}<br><strong>State:</strong> {party_state} &nbsp;&nbsp;&nbsp; <strong>Code:</strong> {party_state_code}</td>
-                                <td style="width: 50%; padding: 0;">
-                                    <table style="border:none; width: 100%;">
-                                        <tr><td style="border:none; width: 50%; padding-bottom: 4px;"><strong>Challan No:</strong> {challan_no}</td><td style="border:none; border-left: 1px solid #aeb6bf; width: 50%; padding-bottom: 4px;"><strong>Date:</strong> {challan_date.strftime('%d/%m/%Y')}</td></tr>
-                                        <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Vehicle:</strong> {vehicle_no}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px; padding-bottom: 4px;"><strong>Transport Mode:</strong> {transport_mode}</td></tr>
-                                        <tr><td style="border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;"><strong>Date of Supply:</strong> {date_of_supply}</td><td style="border:none; border-top: 1px solid #aeb6bf; border-left: 1px solid #aeb6bf; padding-top: 4px;"><strong>Place of Supply:</strong> {place_of_supply}</td></tr>
-                                        {eway_row}
-                                    </table>
-                                </td>
-                            </tr>
-                        </table>
-                        <table class="items-table">
-                            <tr><th style="width:5%;">S.No</th><th style="width:35%;">Product Description</th><th style="width:10%;">HSN Code</th><th style="width:10%;">No of Box</th><th style="width:10%;">Total Qty</th><th style="width:12%;">Approx. Rate</th><th style="width:18%;">Approx. Amount</th></tr>
-                            {items_html}<tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                        </table>
-                        <table style="border-top: 2px solid #1c2d42;">
-                            <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:20%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:20%; text-align:right;">{total_before:.2f}</td></tr>
-                            <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
-                            <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
-                            <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
-                            <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_after:.2f}</td></tr>
-                        </table>
-                        <div class="footer"><p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p><div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div></div>
-                    </div>
-                </body></html>"""
-                
-                pdf_c = HTML(string=html_content).write_pdf()
-                
-                st.success("✅ Challan Saved Successfully!")
-                c_dl, c_wa = st.columns([2, 2])
-                c_dl.download_button(label="📄 Download Ready PDF", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
-                
-                wa_msg = f"Hello {party_name},%0A%0AHere are your dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Amount:* ₹{total_after:.2f}%0A%0AThank you!"
-                wa_link = f"https://wa.me/?text={wa_msg}"
-                c_wa.link_button("📲 Send on WhatsApp", wa_link)
+                    </body></html>"""
+                    
+                    pdf_c = HTML(string=html_content).write_pdf()
+                    
+                    st.success("✅ Challan Saved Successfully!")
+                    c_dl, c_wa = st.columns([2, 2])
+                    c_dl.download_button(label="📄 Download Ready PDF", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
+                    
+                    wa_msg = f"Hello {party_name},%0A%0AHere are your dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Amount:* ₹{total_after:.2f}%0A%0AThank you!"
+                    wa_link = f"https://wa.me/?text={wa_msg}"
+                    c_wa.link_button("📲 Send on WhatsApp", wa_link)
