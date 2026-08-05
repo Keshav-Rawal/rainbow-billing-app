@@ -277,14 +277,23 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
 # ==========================================
 if not st.session_state.get("auth_logged_in"):
     st.title("☁️ System Logon")
-    u = st.text_input("User ID"); p = st.text_input("Password", type="password")
+    u = st.text_input("User ID")
+    p = st.text_input("Password", type="password")
     if st.button("Authenticate"):
-        user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
-        if user:
-            st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
-            cookie_manager.set("rainbow_erp_auth", "verified"); cookie_manager.set("rainbow_user_role", user[0]['role']); cookie_manager.set("rainbow_user_name", user[0]['name']); cookie_manager.set("rainbow_user_uid", user[0]['uid'])
-            time.sleep(0.5); st.rerun()
-        else: st.error("❌ Invalid Credentials. Please try again.")
+        # 🚨 STRICT BLANK FIELD VALIDATION 🚨
+        if u.strip() == "" or p.strip() == "":
+            st.warning("⚠️ Please enter both User ID and Password!")
+        else:
+            user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
+            if user:
+                st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
+                cookie_manager.set("rainbow_erp_auth", "verified")
+                cookie_manager.set("rainbow_user_role", user[0]['role'])
+                cookie_manager.set("rainbow_user_name", user[0]['name'])
+                cookie_manager.set("rainbow_user_uid", user[0]['uid'])
+                time.sleep(0.5); st.rerun()
+            else: 
+                st.error("❌ Invalid Credentials. Please try again.")
 else:
     if not st.session_state.get('auth_role'):
         st.session_state['auth_logged_in'] = False
@@ -323,7 +332,7 @@ else:
                     execute_data("TRUNCATE TABLE tax_invoices", ())
                     execute_data("TRUNCATE TABLE challans", ())
                     execute_data("TRUNCATE TABLE company_profiles", ())
-                    execute_data("DELETE FROM users WHERE role != 'customer'", ()) # Will leave the superadmin intact
+                    execute_data("DELETE FROM users WHERE uid != 'boss'", ()) # Ab boss safe rahega
                     st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
                     time.sleep(2)
                     st.rerun()
@@ -340,8 +349,44 @@ else:
             if st.form_submit_button("🚀 Deploy Account"):
                 if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
                     st.success("Account successfully created!"); time.sleep(0.5); st.rerun()
+                    
         st.subheader("👥 User Database")
         st.dataframe(pd.DataFrame(all_users), width="stretch")
+        
+        # 🗑️ INDIVIDUAL CLIENT DELETION FEATURE 🗑️
+        st.markdown("---")
+        st.subheader("🗑️ Delete Client Account")
+        customer_users = [u for u in all_users if u['role'].lower() == 'customer']
+        
+        if customer_users:
+            with st.form("delete_user_form"):
+                del_uid = st.selectbox("Select Client to Delete permanently", [f"{u['name']} (ID: {u['uid']})" for u in customer_users])
+                del_confirm = st.checkbox("I understand this will wipe all their invoices, challans, and master data.")
+                if st.form_submit_button("🚨 Delete Client & Data", type="primary"):
+                    if del_confirm:
+                        # Fetch the exact user record based on dropdown selection
+                        selected_user = next(u for u in customer_users if f"{u['name']} (ID: {u['uid']})" == del_uid)
+                        t_uid = selected_user['uid']
+                        t_name = selected_user['name']
+                        
+                        try:
+                            # Wipe all traces of the specific client from all tables
+                            execute_data("DELETE FROM users WHERE uid=%s", (t_uid,))
+                            execute_data("DELETE FROM company_profiles WHERE uid=%s", (t_uid,))
+                            execute_data("DELETE FROM party_master WHERE uid=%s", (t_uid,))
+                            execute_data("DELETE FROM item_master WHERE uid=%s", (t_uid,))
+                            execute_data("DELETE FROM tax_invoices WHERE created_by=%s", (t_name,))
+                            execute_data("DELETE FROM challans WHERE created_by=%s", (t_name,))
+                            
+                            st.success(f"✅ Client '{t_name}' and their entire dataset has been wiped!")
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error during deletion: {e}")
+                    else:
+                        st.error("⚠️ Please check the confirmation box to proceed with deletion.")
+        else:
+            st.info("No active clients available to delete.")
     
     elif role == "CUSTOMER":
         menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
