@@ -27,7 +27,23 @@ try:
 except ImportError:
     HAS_AI = False
 
-st.set_page_config(page_title="Rainbow ERP - Pro SaaS", layout="wide")
+st.set_page_config(page_title="Rainbow ERP - Enterprise", layout="wide")
+
+# ==========================================
+# 0. POP-UP DIALOG CONFIGURATION
+# ==========================================
+if hasattr(st, 'dialog'):
+    @st.dialog("⚠️ Validation Error")
+    def display_validation_error(missing_list):
+        st.error("Document generation aborted. Please complete the following mandatory fields:")
+        for item in missing_list:
+            st.markdown(f"- **{item}**")
+else:
+    def display_validation_error(missing_list):
+        st.toast("Validation Failed! Missing mandatory fields.", icon="❌")
+        st.error("Document generation aborted. Please complete the following mandatory fields:")
+        for item in missing_list:
+            st.markdown(f"- **{item}**")
 
 # ==========================================
 # 1. SAFE DATABASE FUNCTIONS
@@ -78,7 +94,7 @@ def init_db():
             except: pass
 
             cursor.execute("SELECT COUNT(*) FROM users")
-            if cursor.fetchone()[0] == 0: cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "Keshav (Master)"))
+            if cursor.fetchone()[0] == 0: cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "System Administrator"))
             conn.commit(); cursor.close(); conn.close()
             st.session_state.db_initialized = True
         except: pass
@@ -146,7 +162,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     items_html = ""
     for idx, item in enumerate(items):
         qty_val = float(item.get('qty', 0))
-        qty_str = f"{qty_val:g}" # Format to remove trailing zeros (e.g. 1.500 -> 1.5, 1.0 -> 1)
+        qty_str = f"{qty_val:g}"
         qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
         
         items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item.get('hsn','')}</td><td style='text-align:center; border: 1px solid #000;'>{item.get('boxes','')}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['rate']):.3f}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['amount']):.2f}</td></tr>"
@@ -246,15 +262,15 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
 # 4. APP SYSTEM & SCREENS
 # ==========================================
 if not st.session_state.get("auth_logged_in"):
-    st.title("☁️ SaaS Login")
+    st.title("☁️ System Logon")
     u = st.text_input("User ID"); p = st.text_input("Password", type="password")
-    if st.button("Login"):
+    if st.button("Authenticate"):
         user = fetch_data("SELECT * FROM users WHERE uid = %s AND password = %s", (u, p))
         if user:
             st.session_state.update({"auth_logged_in": True, "auth_role": user[0]['role'], "auth_name": user[0]['name'], "auth_uid": user[0]['uid']})
             cookie_manager.set("rainbow_erp_auth", "verified"); cookie_manager.set("rainbow_user_role", user[0]['role']); cookie_manager.set("rainbow_user_name", user[0]['name']); cookie_manager.set("rainbow_user_uid", user[0]['uid'])
             time.sleep(0.5); st.rerun()
-        else: st.error("❌ Invalid Credentials")
+        else: st.error("❌ Invalid Credentials. Please try again.")
 else:
     if not st.session_state.get('auth_role'):
         st.session_state['auth_logged_in'] = False
@@ -266,8 +282,8 @@ else:
     my_company = get_company_profile(uid)
     
     st.sidebar.title("☁️ ERP System")
-    st.sidebar.write(f"**Welcome:** {safe_name}")
-    if st.sidebar.button("🔒 Logout"):
+    st.sidebar.write(f"**User:** {safe_name}")
+    if st.sidebar.button("🔒 Sign Out"):
         for k in list(st.session_state.keys()):
             if k not in ["cookie_manager"]: st.session_state.pop(k, None)
         cookie_manager.delete("rainbow_erp_auth"); time.sleep(0.5); st.rerun()
@@ -277,7 +293,7 @@ else:
         del st.session_state.redirect_menu
 
     if role == "SUPERADMIN":
-        st.title("👑 Super Admin Dashboard")
+        st.title("👑 Administration Dashboard")
         all_users = fetch_data("SELECT * FROM users")
         total_clients = sum(1 for u in all_users if u['role'] == 'customer')
         m1, m2 = st.columns(2); m1.metric("Total Clients", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
@@ -285,26 +301,26 @@ else:
         with st.form("create_user_form", clear_on_submit=True):
             new_uid = st.text_input("Username / Login ID")
             new_pass = st.text_input("Password", type="password")
-            new_fullname = st.text_input("Full Name / Factory Name")
+            new_fullname = st.text_input("Full Name / Organization Name")
             new_role_select = st.selectbox("Role", ["customer", "superadmin"])
-            if st.form_submit_button("🚀 Create Account Live"):
+            if st.form_submit_button("🚀 Deploy Account"):
                 if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
-                    st.success("Account Created!"); time.sleep(0.5); st.rerun()
-        st.subheader("👥 Live User Database")
+                    st.success("Account successfully created!"); time.sleep(0.5); st.rerun()
+        st.subheader("👥 User Database")
         st.dataframe(pd.DataFrame(all_users), width="stretch")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Menu", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
-            st.title("🏢 Client Dashboard")
-            st.write("Aapke saare permanent vendors aur clients yahan hain. Ek click mein unka specific Bill ya Challan banayein!")
+            st.title("🏢 Partner Dashboard")
+            st.write("Manage your registered vendors and clients here. Generate specific Invoices or Challans with a single click.")
             st.markdown("---")
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             
             if not parties_db:
-                st.info("Abhi tak koi Client add nahi kiya hai. Left menu se '📦 Add Master Data' mein jaakar apni pehli party add karein.")
+                st.info("No business partners found. Please navigate to 'Add Master Data' to register your first partner.")
             else:
                 cols = st.columns(3)
                 for idx, p in enumerate(parties_db):
@@ -323,7 +339,7 @@ else:
                             st.session_state.redirect_menu = "📝 Delivery Challan"
                             st.rerun()
                             
-                        if st.button("🗑️ Delete Party", key=f"d_del_{p['id']}", use_container_width=True):
+                        if st.button("🗑️ Remove Partner", key=f"d_del_{p['id']}", use_container_width=True):
                             execute_data("DELETE FROM party_master WHERE id=%s", (p['id'],))
                             execute_data("DELETE FROM item_master WHERE party_name=%s AND uid=%s", (p['party_name'], uid)) 
                             st.rerun()
@@ -331,7 +347,8 @@ else:
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
         elif menu == "⚙️ Company Profile":
-            st.title("⚙️ Dynamic Company Profile")
+            st.title("⚙️ Global Profile Configuration")
+            st.write("Configure your exact organizational details here to ensure professional formatting on all commercial documents.")
             c_name = st.text_input("Company/Factory Name *", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
             c_gst = st.text_input("GSTIN Number *", value=my_company["gstin"], key="c_gst")
@@ -340,55 +357,55 @@ else:
             c_scode = st.text_input("State Code *", value=my_company["state_code"], key="c_scode")
             c_contact = st.text_input("Contact Lines *", value=my_company.get("contact", ""), key="c_contact")
             c_manu = st.text_input("Business Scope *", value=my_company.get("manufacturing", ""), key="c_manu")
-            if st.button("💾 Save Profile", type="primary"):
+            if st.button("💾 Update Configuration", type="primary"):
                 execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu))
-                st.success("Profile Updated!"); time.sleep(0.5); st.rerun()
+                st.success("Configuration synchronized successfully."); time.sleep(0.5); st.rerun()
             
         elif menu == "📦 Add Master Data":
             st.title("📦 Master Data Management")
             
             c1, c2 = st.columns(2)
             with c1:
-                st.subheader("👥 Add New Party")
+                st.subheader("👥 Register New Partner")
                 with st.form("p_m", clear_on_submit=True):
-                    pn = st.text_input("Party Name *")
+                    pn = st.text_input("Partner Name *")
                     pa = st.text_area("Address *")
                     pg = st.text_input("GSTIN *")
                     ps = st.text_input("State *")
                     pc = st.text_input("State Code *")
                     ppos = st.text_input("Place of Supply (City/State) *")
-                    if st.form_submit_button("Save Party"):
+                    if st.form_submit_button("Save Partner"):
                         if pn and pa and pg and ps and pc:
                             execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
-                            st.success(f"Party '{pn}' Saved Successfully!")
-                        else: st.error("Lal sitaare (*) waale sabhi fields bharna zaroori hai!")
+                            st.success(f"Partner '{pn}' securely registered.")
+                        else: st.error("Please complete all mandatory fields marked with (*).")
 
             with c2:
-                st.subheader("📦 Add Items specific to a Party")
+                st.subheader("📦 Add Partner Materials")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
                 if not saved_parties:
-                    st.warning("⚠️ Pehle left side se Party add karein, fir uske items add kar payenge.")
+                    st.warning("⚠️ Please register a Business Partner on the left before mapping items.")
                 else:
                     with st.form("i_m", clear_on_submit=True):
-                        linked_party = st.selectbox("Select Party for this Item *", saved_parties)
+                        linked_party = st.selectbox("Assign to Partner *", saved_parties)
                         idsc = st.text_input("Item Description *")
                         ihsn = st.text_input("HSN Code *")
-                        irate = st.number_input("Default Rate (₹) *", min_value=0.0, step=1.0)
+                        irate = st.number_input("Standard Rate (INR) *", min_value=0.0, step=1.0)
                         
-                        if st.form_submit_button("Save Item for this Party"):
+                        if st.form_submit_button("Save Item Map"):
                             if idsc and ihsn:
                                 execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code, rate) VALUES (%s, %s, %s, %s, %s)", (uid, linked_party, idsc, ihsn, irate))
-                                st.success(f"Item saved specifically for {linked_party}!")
-                            else: st.error("Item Description aur HSN zaroori hai!")
+                                st.success(f"Material record successfully mapped to {linked_party}.")
+                            else: st.error("Item Description and HSN Code are mandatory.")
                 
                 saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code, rate FROM item_master WHERE uid=%s", (uid,))
                 if saved_items:
-                    with st.expander("🗑️ View / Delete Saved Items"):
+                    with st.expander("🗑️ View / Purge Mapped Items"):
                         for itm in saved_items:
                             col_a, col_b = st.columns([4, 1])
                             col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']} | Rate: ₹{itm.get('rate', 0.0)})")
-                            if col_b.button("Del", key=f"del_it_{itm['id']}"):
+                            if col_b.button("Purge", key=f"del_it_{itm['id']}"):
                                 execute_data("DELETE FROM item_master WHERE id=%s", (itm['id'],))
                                 st.rerun()
 
@@ -396,11 +413,11 @@ else:
         # 3D DRAWING VIEWER & MEASUREMENT MODULE
         # ==========================================
         elif menu == "📐 3D Part Viewer":
-            st.title("📐 Pro 3D CAD Viewer & Weight Calculator")
-            st.write("Ab **.STL aur .OBJ** files upload karein. Exact theoretical weight ke sath apna Factory Margin bhi lagayein!")
+            st.title("📐 CAD Geometry Analysis & Mass Estimator")
+            st.write("Upload **.STL or .OBJ** geometry files to calculate precise theoretical mass and configure production scrap margins.")
             
             if not HAS_3D:
-                st.error("⚠️ 3D Libraries missing! Backend me `pip install trimesh plotly scipy networkx` install hona chahiye.")
+                st.error("⚠️ 3D Rendering dependencies missing! Please ensure backend supports `trimesh`, `plotly`, `scipy`, `networkx`.")
             else:
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
@@ -413,11 +430,11 @@ else:
 
                 col_mat, col_slider = st.columns([1, 1])
                 with col_mat:
-                    selected_material = st.selectbox("Select Material for Calculation", list(MATERIALS.keys()))
+                    selected_material = st.selectbox("Material Density Profile", list(MATERIALS.keys()))
                 with col_slider:
-                    margin_pct = st.slider("⚙️ Factory Machining / Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Actual factory weight nikalne ke liye machining tolerance ya scrap waste ka margin add karein.")
+                    margin_pct = st.slider("⚙️ Production Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Configure machining tolerance or scrap margin to estimate actual production mass.")
 
-                uploaded_file = st.file_uploader("Upload a 3D File (.stl, .obj)", type=['stl', 'obj'])
+                uploaded_file = st.file_uploader("Upload Geometry (.stl, .obj)", type=['stl', 'obj'])
                 
                 if uploaded_file is not None:
                     file_extension = uploaded_file.name.split('.')[-1].lower()
@@ -426,7 +443,7 @@ else:
                         tmp_path = tmp.name
                     
                     try:
-                        with st.spinner("Analyzing 3D Mesh... Please wait"):
+                        with st.spinner("Processing Mesh Vectors..."):
                             mesh = trimesh.load(tmp_path)
                             
                             vol_mm3 = mesh.volume
@@ -439,18 +456,18 @@ else:
                             theoretical_weight = vol_cm3 * density
                             practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
-                            st.success(f"✅ Part Loaded Successfully: {uploaded_file.name}")
+                            st.success(f"✅ Geometry parsed successfully: {uploaded_file.name}")
                             
-                            st.subheader("📊 Part Details & Weights")
+                            st.subheader("📊 Analytical Metrics")
                             m1, m2, m3, m4 = st.columns(4)
                             m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
                             m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
-                            m3.metric("Theoretical Weight", f"{theoretical_weight:,.2f} g")
+                            m3.metric("Theoretical Mass", f"{theoretical_weight:,.2f} g")
                             
-                            m4.metric(f"🛠️ Practical Weight (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
+                            m4.metric(f"🛠️ Production Mass (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
                             
                             st.markdown("---")
-                            st.subheader("🔍 Interactive 3D View")
+                            st.subheader("🔍 Interactive Hologram")
                             
                             vertices = mesh.vertices
                             faces = mesh.faces
@@ -479,56 +496,56 @@ else:
                             st.plotly_chart(fig, use_container_width=True)
                             
                     except Exception as e:
-                        st.error(f"Error loading 3D File: {e}. Kripya ensure karein ki aapne sahi STL/OBJ file daali hai.")
+                        st.error(f"Execution Error: {e}. Please ensure you have uploaded a valid STL/OBJ file.")
                     finally:
                         os.remove(tmp_path)
 
         # ==========================================
-        # AI ASSISTANT MODULE
+        # AI ASSISTANT MODULE (MULTI-LINGUAL CAPABLE)
         # ==========================================
         elif menu == "🤖 AI Assistant":
-            st.title("🤖 Rainbow AI Assistant")
-            st.write("Aapke ERP ka smart helper! Puchiye app kaise use karna hai, kaise bill banana hai, ya koi bhi dusra sawal.")
+            st.title("🤖 Enterprise AI Assistant")
+            st.write("Your intelligent system assistant. Inquire about system navigation, document generation, or general operations.")
             st.markdown("---")
 
             if not HAS_AI:
-                st.error("⚠️ AI Library missing! Backend me `pip install google-generativeai` install karein.")
+                st.error("⚠️ AI Module Offline. Backend requires `google-generativeai` package.")
             else:
                 if "gemini_api_key" not in st.session_state:
                     st.session_state.gemini_api_key = ""
                 
                 if not st.session_state.gemini_api_key:
-                    st.info("💡 AI chalane ke liye ek free Google Gemini API key ki zaroorat hai. (Google AI Studio se mil jayegi)")
-                    api_input = st.text_input("Enter Gemini API Key:", type="password")
-                    if st.button("Save Key & Start AI"):
+                    st.info("💡 A valid Google Gemini API Key is required to initialize the neural link. (Available via Google AI Studio)")
+                    api_input = st.text_input("Enter Execution Key:", type="password")
+                    if st.button("Establish Neural Link"):
                         st.session_state.gemini_api_key = api_input
                         st.rerun()
                 else:
                     try:
                         genai.configure(api_key=st.session_state.gemini_api_key)
                         
-                        sys_prompt = """Tumhara naam 'Rainbow AI' hai. Tum Rainbow ERP ke ek smart aur helpful assistant ho. 
-                        Tumhara kaam staff ko ERP use karna sikhana hai. 
-                        ERP me yeh 5 main features hain:
-                        1. Dashboard: Yahan se direct kisi bhi party ka bill/challan bana sakte hain.
-                        2. Add Master Data: Yahan naye client ka naam, GST aur uske specific items save hote hain.
-                        3. Tax Invoice & Delivery Challan: Master data se autofill karke bill banate hain. IGST/CGST automatically calculate hota hai.
-                        4. 3D Part Viewer: Factory waale .STL file upload karke plastic part (PP, ABS) ka exact weight aur factory margin nikal sakte hain.
-                        5. History: Purane bills dekhne ke liye.
+                        sys_prompt = """You are 'Rainbow AI', an intelligent assistant for Rainbow ERP.
+                        Your objective is to guide users on how to operate the ERP system.
+                        ERP Features:
+                        1. Dashboard: Direct document generation for registered partners.
+                        2. Master Data: Register partners, GSTINs, and map specific materials/rates.
+                        3. Tax Invoice & Challan: Auto-filled document generation with automatic IGST/CGST calculations.
+                        4. 3D Viewer: Upload .STL/.OBJ files to calculate part weights and configurable scrap margins.
+                        5. History: View analytics and download historical documents.
                         
-                        Tumhe humesha friendly, professional aur 'Hinglish' (Hindi + English) bhasha mein chote aur clear points mein jawab dena hai. Jawab mein zaroorat padne par emojis ka use karein. Kabhi bhi code ya programming ki baatein na karein, sirf user/staff ki madad karein."""
+                        CRITICAL INSTRUCTION: You are capable of understanding and communicating in ANY language the user prefers (including Hinglish, Hindi, English, etc.). Adapt your language to match the user's prompt perfectly while keeping the tone professional. Use bullet points and appropriate emojis. Do not output raw code."""
 
                         model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=sys_prompt)
 
                         if "chat_history" not in st.session_state:
                             st.session_state.chat_history = []
-                            st.session_state.chat_history.append({"role": "model", "parts": ["Namaste! Main Rainbow AI hoon. Batayiye, aaj main ERP mein aapki kya madad kar sakta hoon?"]})
+                            st.session_state.chat_history.append({"role": "model", "parts": ["Hello! I am Rainbow AI. How may I assist you with the ERP system today?"]})
 
                         for msg in st.session_state.chat_history:
                             with st.chat_message("user" if msg["role"] == "user" else "assistant"):
                                 st.markdown(msg["parts"][0])
 
-                        prompt = st.chat_input("Puchiye, jaise 'Naya Invoice kaise banau?'")
+                        prompt = st.chat_input("Input query... (e.g., 'How do I generate an invoice?')")
                         
                         if prompt:
                             st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
@@ -536,33 +553,33 @@ else:
                                 st.markdown(prompt)
                                 
                             with st.chat_message("assistant"):
-                                with st.spinner("AI Soch raha hai..."):
+                                with st.spinner("Processing query..."):
                                     chat = model.start_chat(history=st.session_state.chat_history[:-1])
                                     response = chat.send_message(prompt)
                                     st.markdown(response.text)
                                     st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
                                     
-                        if st.button("🗑️ Clear Chat History"):
+                        if st.button("🗑️ Wipe Memory"):
                             st.session_state.chat_history = []
                             st.rerun()
 
                     except Exception as e:
-                        st.error(f"❌ Asli Error: {e}")
-                        st.info("Agar error aati hai toh shayad API key verify nahi ho rahi hai.")
-                        if st.button("Change API Key"):
+                        st.error(f"❌ Connection Exception: {e}")
+                        st.info("If you encounter an error, your API key might be invalid or unverified.")
+                        if st.button("Reconfigure API Key"):
                             st.session_state.gemini_api_key = ""
                             st.rerun()
 
-        elif menu == "📜 History":
-            st.title("📜 Document History & Analytics")
-            view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+        elif menu == "📜 Analytics History":
+            st.title("📜 Document Ledger & Analytics")
+            view_type = st.radio("Select View Category:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
-                p_names = ["All Parties"] + [p['party_name'] for p in party_list]
-                sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_chal")
+                p_names = ["All Partners"] + [p['party_name'] for p in party_list]
+                sel_history_p = st.selectbox("🔍 Filter Data by Partner", p_names, key="hist_chal")
 
-                if sel_history_p == "All Parties":
+                if sel_history_p == "All Partners":
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND party_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
@@ -572,10 +589,10 @@ else:
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['challan_date'], format='%d/%m/%Y', errors='coerce')
                     
-                    st.markdown(f"### 📈 {sel_history_p} Analytics")
+                    st.markdown(f"### 📈 Node Analytics: {sel_history_p}")
                     c1, c2 = st.columns(2)
-                    c1.metric("🧾 Total Challans Issued", f"{len(df)}")
-                    c2.metric("💰 Total Value of Challans", f"₹ {df['clean_amt'].sum():,.2f}")
+                    c1.metric("🧾 Total Documents Issued", f"{len(df)}")
+                    c2.metric("💰 Cumulative Value", f"₹ {df['clean_amt'].sum():,.2f}")
                     
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
@@ -586,9 +603,9 @@ else:
                         st.bar_chart(chart_data)
                     
                     st.markdown("---")
-                    st.write("**Recent Challan Records:**")
+                    st.write("**Recent Document Ledger:**")
 
-                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Challan No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Issue Date**"); h2.write("**Document No**"); h3.write("**Partner Name**"); h4.write("**Value**"); h5.write("**Actions**")
                     for c in data[:50]:
                         c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
                         c1.write(c['challan_date']); c2.write(c['challan_no']); c3.write(c['party_name']); c4.write(c['amount'])
@@ -596,13 +613,13 @@ else:
                             fd = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📝 Delivery Challan"}); st.rerun()
                         if c5_del.button("🗑️", key=f"dc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("No active Challans found for this selection.")
+                else: st.info("No active logs found for these parameters.")
             else:
                 party_list = fetch_data("SELECT DISTINCT bill_to_name FROM tax_invoices WHERE created_by = %s AND is_deleted = 0", (safe_name,))
-                p_names = ["All Parties"] + [p['bill_to_name'] for p in party_list]
-                sel_history_p = st.selectbox("🔍 Filter by Party Name", p_names, key="hist_inv")
+                p_names = ["All Partners"] + [p['bill_to_name'] for p in party_list]
+                sel_history_p = st.selectbox("🔍 Filter Data by Partner", p_names, key="hist_inv")
 
-                if sel_history_p == "All Parties":
+                if sel_history_p == "All Partners":
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND bill_to_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
@@ -612,10 +629,10 @@ else:
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['invoice_date'], format='%d/%m/%Y', errors='coerce')
                     
-                    st.markdown(f"### 📈 {sel_history_p} Analytics")
+                    st.markdown(f"### 📈 Node Analytics: {sel_history_p}")
                     c1, c2 = st.columns(2)
-                    c1.metric("🧾 Total Tax Invoices", f"{len(df)}")
-                    c2.metric("💰 Total Billing Amount", f"₹ {df['clean_amt'].sum():,.2f}")
+                    c1.metric("🧾 Total Documents Issued", f"{len(df)}")
+                    c2.metric("💰 Cumulative Value", f"₹ {df['clean_amt'].sum():,.2f}")
                     
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
@@ -626,9 +643,9 @@ else:
                         st.bar_chart(chart_data)
                         
                     st.markdown("---")
-                    st.write("**Recent Invoice Records:**")
+                    st.write("**Recent Document Ledger:**")
 
-                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Date**"); h2.write("**Invoice No**"); h3.write("**Party Name**"); h4.write("**Amount**"); h5.write("**Actions**")
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**Issue Date**"); h2.write("**Document No**"); h3.write("**Partner Name**"); h4.write("**Value**"); h5.write("**Actions**")
                     for c in data[:50]:
                         c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
                         c1.write(c['invoice_date']); c2.write(c['invoice_no']); c3.write(c['bill_to_name']); c4.write(c['amount'])
@@ -636,16 +653,16 @@ else:
                             fd = fetch_data("SELECT * FROM tax_invoices WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📄 Tax Invoice"}); st.rerun()
                         if c5_del.button("🗑️", key=f"di_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("No active Tax Invoices found for this selection.")
+                else: st.info("No active logs found for these parameters.")
 
         elif menu == "🗑️ Recycle Bin":
-            st.title("🗑️ Recycle Bin")
-            view_type = st.radio("Select View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            st.title("🗑️ Security Purge Container")
+            view_type = st.radio("Select Archive View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 data = fetch_data("SELECT id, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
-                    if st.button("🚨 Empty Entire Challan Bin", type="primary"):
+                    if st.button("🚨 Flush Entire Data Sector", type="primary"):
                         execute_data("DELETE FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                         st.rerun()
                     st.markdown("---")
@@ -653,12 +670,12 @@ else:
                         c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['challan_no']); c2.write(c['party_name']); c3.write(c['amount'])
                         if c4.button("🔄 Restore", key=f"rc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
-                        if c5.button("❌ Delete", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("Challan Recycle Bin is clean! ✨")
+                        if c5.button("❌ Annihilate", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Challan archive is completely secure and empty.")
             else:
                 data = fetch_data("SELECT id, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
-                    if st.button("🚨 Empty Entire Invoice Bin", type="primary"):
+                    if st.button("🚨 Flush Entire Data Sector", type="primary"):
                         execute_data("DELETE FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                         st.rerun()
                     st.markdown("---")
@@ -666,17 +683,17 @@ else:
                         c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
                         c1.write(c['invoice_no']); c2.write(c['bill_to_name']); c3.write(c['amount'])
                         if c4.button("🔄 Restore", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
-                        if c5.button("❌ Delete", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
-                else: st.info("Tax Invoice Recycle Bin is clean! ✨")
+                        if c5.button("❌ Annihilate", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("Invoice archive is completely secure and empty.")
 
         # ==========================================
         # TAX INVOICE ENGINE
         # ==========================================
         elif menu == "📄 Tax Invoice":
-            st.title("📄 Tax Invoice Engine")
+            st.title("📄 Commercial Invoice Generator")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             
-            if st.button("🔄 Clear Form (New Invoice)", key="c_inv"):
+            if st.button("🔄 Clear Document Matrix", key="c_inv"):
                 preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
                     if k not in preserve: st.session_state.pop(k, None)
@@ -684,16 +701,16 @@ else:
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
-            if mode == "UPDATE": st.warning("⚠️ EDITING existing Invoice.")
+            if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
 
             def_inv_no = fd.get('invoice_no', get_next_auto_no('tax_invoices', 'invoice_no', safe_name)) if mode == "INSERT" else fd.get('invoice_no','')
             def_date_time = get_ist_time()
 
             dash_party = st.session_state.pop('sel_inv_p', None)
-            party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
+            party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
             default_idx = party_names.index(dash_party) if dash_party in party_names else 0
 
-            if dash_party and dash_party != "-- Select Party from Master --":
+            if dash_party and dash_party != "-- Select Business Partner --":
                 pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
                 if pm:
                     st.session_state.b1 = pm['party_name']
@@ -710,7 +727,7 @@ else:
                 st.session_state.b5 = fd.get('bill_to_state_code', '')
                 st.session_state.pos_inv = fd.get('place_of_supply', '')
 
-            with st.expander("📌 Invoice & Transport Details", expanded=True):
+            with st.expander("📌 General Logistics Parameters", expanded=True):
                 c1, c2, c3, c4, c5_ew = st.columns([2, 2, 2, 2, 2])
                 invoice_no = c1.text_input("Invoice No. *", value=def_inv_no)
                 invoice_date = c2.date_input("Invoice Date *", parse_date(fd.get('invoice_date')))
@@ -724,14 +741,14 @@ else:
                 vehicle_no = c7.text_input("Vehicle No. *", fd.get('vehicle_no',''))
                 date_of_supply = c8.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
 
-            with st.expander("🏢 Parties Details", expanded=True):
+            with st.expander("🏢 Partner Information", expanded=True):
                 col_b, col_s = st.columns(2)
                 with col_b:
-                    st.markdown("**Bill To Party:**")
+                    st.markdown("**Bill-To Entity:**")
                     
                     def autofill_inv_party():
                         sel = st.session_state.sel_inv_p_widget
-                        if sel != "-- Select Party from Master --":
+                        if sel != "-- Select Business Partner --":
                             pm = next((p for p in parties_db if p['party_name'] == sel), None)
                             if pm:
                                 st.session_state.b1 = pm['party_name']
@@ -743,18 +760,18 @@ else:
                         else:
                             for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
 
-                    sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_inv_p_widget", on_change=autofill_inv_party)
+                    sel_p = st.selectbox("Reference Master Data", party_names, index=default_idx, key="sel_inv_p_widget", on_change=autofill_inv_party)
                         
-                    b_name = st.text_input("Name *", key="b1")
-                    b_add = st.text_area("Address *", key="b2", height=68)
-                    b_gst = st.text_input("GSTIN *", key="b3")
+                    b_name = st.text_input("Partner Name *", key="b1")
+                    b_add = st.text_area("Registered Address *", key="b2", height=68)
+                    b_gst = st.text_input("GSTIN Reference *", key="b3")
                     c_st1, c_st2, c_st3 = st.columns(3)
-                    with c_st1: b_state = st.text_input("State *", key="b4")
-                    with c_st2: b_scode = st.text_input("State Code *", key="b5")
+                    with c_st1: b_state = st.text_input("State Region *", key="b4")
+                    with c_st2: b_scode = st.text_input("Regional Code *", key="b5")
                     with c_st3: place_of_supply = st.text_input("Place of Supply *", key="pos_inv")
                 
                 with col_s:
-                    st.markdown("**Shipped To Party:**")
+                    st.markdown("**Ship-To Entity:**")
                     
                     if 's1' not in st.session_state:
                         st.session_state.s1 = fd.get('ship_to_name', '')
@@ -763,7 +780,7 @@ else:
                         st.session_state.s4 = fd.get('ship_to_state', '')
                         st.session_state.s5 = fd.get('ship_to_state_code', '')
 
-                    same_as = st.checkbox("Same as Bill To")
+                    same_as = st.checkbox("Mirror Bill-To Information")
                     if same_as:
                         st.session_state.s1 = st.session_state.b1
                         st.session_state.s2 = st.session_state.b2
@@ -771,25 +788,25 @@ else:
                         st.session_state.s4 = st.session_state.b4
                         st.session_state.s5 = st.session_state.b5
                     
-                    s_name = st.text_input("Name *", key="s1", disabled=same_as)
-                    s_add = st.text_area("Address *", key="s2", height=68, disabled=same_as)
-                    s_gst = st.text_input("GSTIN *", key="s3", disabled=same_as)
-                    s_state = st.text_input("State *", key="s4", disabled=same_as)
-                    s_scode = st.text_input("State Code *", key="s5", disabled=same_as)
+                    s_name = st.text_input("Partner Name * ", key="s1", disabled=same_as)
+                    s_add = st.text_area("Registered Address * ", key="s2", height=68, disabled=same_as)
+                    s_gst = st.text_input("GSTIN Reference * ", key="s3", disabled=same_as)
+                    s_state = st.text_input("State Region * ", key="s4", disabled=same_as)
+                    s_scode = st.text_input("Regional Code * ", key="s5", disabled=same_as)
 
-            st.subheader("📦 Item Details")
-            if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
+            st.subheader("📦 Line Items")
+            if sel_p != "-- Select Business Partner --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
             else: items_db = []
                 
-            item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
+            item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
             
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
-            if col_btn1.button("➕ Add Item"): st.session_state.item_count += 1; st.rerun()
-            if col_btn2.button("➖ Remove Item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
+            if col_btn1.button("➕ Insert Blank Row"): st.session_state.item_count += 1; st.rerun()
+            if col_btn2.button("➖ Remove Bottom Row") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
             def autofill_inv_item(index, db):
                 sel = st.session_state[f"sel_it_inv_widget_{index}"]
-                if sel != "-- Custom Item --":
+                if sel != "-- Manual Configuration --":
                     im = next((it for it in db if it['item_description'] == sel), None)
                     if im:
                         st.session_state[f"id_{index}"] = im['item_description']
@@ -799,7 +816,7 @@ else:
             items_data = []
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
-                st.markdown(f"**Item {i+1}**")
+                st.markdown(f"**Item Sequence {i+1}**")
                 
                 if f"id_{i}" not in st.session_state:
                     st.session_state[f"id_{i}"] = ex.get('desc', '')
@@ -809,33 +826,33 @@ else:
                     st.session_state[f"iu_{i}"] = ex.get('unit', 'Pcs')
                     st.session_state[f"ir_{i}"] = float(ex.get('rate', 0.0))
 
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
+                sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
                 
                 c1, c2, c3, c4, c_unit, c5 = st.columns([3, 1.2, 1.0, 1.2, 1.2, 1.4])
-                with c1: desc = st.text_input("Description *", key=f"id_{i}")
+                with c1: desc = st.text_input("Material Description *", key=f"id_{i}")
                 with c2: hsn = st.text_input("HSN Code *", key=f"ih_{i}")
-                with c3: boxes = st.text_input("Boxes *", key=f"ib_{i}")
-                with c4: qty = st.number_input("Qty *", min_value=0.0, format="%.3f", key=f"iq_{i}")
-                with c_unit: unit = st.selectbox("Unit *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"iu_{i}")
-                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, format="%.3f", key=f"ir_{i}")
+                with c3: boxes = st.text_input("Packages *", key=f"ib_{i}")
+                with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"iq_{i}")
+                with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"iu_{i}")
+                with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"ir_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
-            tax_type = st.radio("Tax Calculation:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
+            tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
             tax_mode = "IGST" if "IGST" in tax_type else "CGST"
 
             if 'pdf_comp' in st.session_state:
-                st.success("✅ Invoice Generated & Saved!")
+                st.success("✅ Commercial Document Successfully Generated.")
                 c_dl1, c_dl2, c_wa = st.columns([2, 2, 1.5])
-                c_dl1.download_button("📄 Download Company Copies (3 Pages)", data=st.session_state['pdf_comp'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_Company.pdf", mime="application/pdf", type="primary")
-                c_dl2.download_button("📁 Download Office Copy (1 Page)", data=st.session_state['pdf_off'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_OfficeCopy.pdf", mime="application/pdf")
+                c_dl1.download_button("📄 Export Complete Document (3 Pages)", data=st.session_state['pdf_comp'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_Company.pdf", mime="application/pdf", type="primary")
+                c_dl2.download_button("📁 Export Accounting Copy (1 Page)", data=st.session_state['pdf_off'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_OfficeCopy.pdf", mime="application/pdf")
                 
-                wa_msg = f"Hello {st.session_state.get('b1', 'Sir/Madam')},%0A%0AHere are your billing details from *{my_company['name']}*:%0A*Invoice No:* {st.session_state['inv_no']}%0A*Amount:* {st.session_state.get('inv_amt', '')}%0A%0AThank you for your business!"
+                wa_msg = f"Hello {st.session_state.get('b1', 'Sir/Madam')},%0A%0AHere are your official billing details from *{my_company['name']}*:%0A*Invoice No:* {st.session_state['inv_no']}%0A*Total Amount:* {st.session_state.get('inv_amt', '')}%0A%0AWe appreciate your business!"
                 wa_link = f"https://wa.me/?text={wa_msg}"
-                c_wa.link_button("📲 Send on WhatsApp", wa_link)
+                c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
-                if st.button("🚀 Save & Generate Invoice PDF", type="primary"):
-                    # 🔴 STRICT VALIDATION CHECK
+                if st.button("🚀 Finalize & Compile PDF Document", type="primary"):
+                    # 🔴 POPUP VALIDATION TRIGGER
                     req_fields = {
                         "Invoice No.": invoice_no, "Transport Mode": transport_mode, 
                         "Vehicle No.": vehicle_no, "Date & Time of Supply": date_of_supply,
@@ -849,10 +866,10 @@ else:
                     
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
-                        missing.append(f"Proper Item Details (Desc, HSN, Boxes, Qty > 0, Rate > 0) for Row(s): {', '.join(invalid_items)}")
+                        missing.append(f"Incomplete Material Sequence (Description, HSN, Box, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
 
                     if missing:
-                        st.error(f"⚠️ Neeche diye gaye Mandatory (*) fields ko bharna zaroori hai:\n- " + "\n- ".join(missing))
+                        display_validation_error(missing)
                     else:
                         total_before = sum(item['amount'] for item in items_data)
                         cgst = total_before * 0.09 if tax_mode == "CGST" else 0
@@ -896,10 +913,10 @@ else:
         # DELIVERY CHALLAN ENGINE
         # ==========================================
         elif menu == "📝 Delivery Challan":
-            st.title("📝 Delivery Challan Engine")
+            st.title("📝 Automated Dispatch Challan")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             
-            if st.button("🔄 Clear Form (Make New Challan)", key="c_btn"):
+            if st.button("🔄 Initialize Blank Document", key="c_btn"):
                 preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
                     if k not in preserve: st.session_state.pop(k, None)
@@ -907,16 +924,16 @@ else:
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
-            if mode == "UPDATE": st.warning("⚠️ EDITING existing challan.")
+            if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
             
             def_chal_no = fd.get('challan_no', get_next_auto_no('challans', 'challan_no', safe_name)) if mode == "INSERT" else fd.get('challan_no','')
             def_date_time = get_ist_time()
 
             dash_party = st.session_state.pop('sel_chal_p', None)
-            party_names = ["-- Select Party from Master --"] + [p['party_name'] for p in parties_db]
+            party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
             default_idx = party_names.index(dash_party) if dash_party in party_names else 0
             
-            if dash_party and dash_party != "-- Select Party from Master --":
+            if dash_party and dash_party != "-- Select Business Partner --":
                 pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
                 if pm:
                     st.session_state.p_name = pm['party_name']
@@ -935,11 +952,11 @@ else:
 
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("**Dispatch To Party Details:**")
+                st.markdown("**Dispatch Logistics Details:**")
                 
                 def autofill_chal_party():
                     sel = st.session_state.sel_chal_p_widget
-                    if sel != "-- Select Party from Master --":
+                    if sel != "-- Select Business Partner --":
                         pm = next((p for p in parties_db if p['party_name'] == sel), None)
                         if pm:
                             st.session_state.p_name = pm['party_name']
@@ -951,39 +968,39 @@ else:
                     else:
                         for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
                 
-                sel_p = st.selectbox("Autofill Party Details", party_names, index=default_idx, key="sel_chal_p_widget", on_change=autofill_chal_party)
+                sel_p = st.selectbox("Reference Master Data", party_names, index=default_idx, key="sel_chal_p_widget", on_change=autofill_chal_party)
                         
-                party_name = st.text_input("Dispatch To (Party Name) *", key="p_name")
-                party_address = st.text_area("Party Address *", key="p_add")
-                party_gstin = st.text_input("Party GSTIN *", key="p_gst")
+                party_name = st.text_input("Dispatch To Name *", key="p_name")
+                party_address = st.text_area("Registered Address *", key="p_add")
+                party_gstin = st.text_input("GSTIN Reference *", key="p_gst")
                 
                 c_st1, c_st2, c_st3 = st.columns(3)
-                with c_st1: party_state = st.text_input("Party State *", key="p_state")
-                with c_st2: party_state_code = st.text_input("State Code *", key="p_scode")
+                with c_st1: party_state = st.text_input("State Region *", key="p_state")
+                with c_st2: party_state_code = st.text_input("Regional Code *", key="p_scode")
                 with c_st3: place_of_supply = st.text_input("Place of Supply *", key="pos_chal")
                 
             with col2:
-                st.markdown("**Challan Details:**")
+                st.markdown("**Document Identification:**")
                 challan_no = st.text_input("Challan No. *", value=def_chal_no, key="c_no")
                 eway_bill_no = st.text_input("E-Way Bill No. (Optional)", value=fd.get('eway_bill_no',''), key="ew_no")
                 vehicle_no = st.text_input("Vehicle No. *", value=fd.get('vehicle_no', ''), key="v_no")
-                challan_date = st.date_input("Challan Date *", parse_date(fd.get('challan_date')), key="c_date")
+                challan_date = st.date_input("Document Date *", parse_date(fd.get('challan_date')), key="c_date")
                 transport_mode = st.text_input("Transport Mode *", value=fd.get('transport_mode', 'Road'), key="t_mode")
                 date_of_supply = st.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
 
-            st.subheader("📦 Item Details")
-            if sel_p != "-- Select Party from Master --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
+            st.subheader("📦 Line Items")
+            if sel_p != "-- Select Business Partner --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
             else: items_db = []
                 
-            item_opts = ["-- Custom Item --"] + [it['item_description'] for it in items_db]
+            item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
 
             c_btn1, c_btn2, _ = st.columns([2, 2, 8])
-            if c_btn1.button("➕ Add Item", key="add_item"): st.session_state.item_count += 1; st.rerun()
-            if c_btn2.button("➖ Remove Item", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
+            if c_btn1.button("➕ Insert Blank Row", key="add_item"): st.session_state.item_count += 1; st.rerun()
+            if c_btn2.button("➖ Remove Bottom Row", key="rem_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
 
             def autofill_chal_item(index, db):
                 sel = st.session_state[f"sel_it_chal_widget_{index}"]
-                if sel != "-- Custom Item --":
+                if sel != "-- Manual Configuration --":
                     im = next((it for it in db if it['item_description'] == sel), None)
                     if im:
                         st.session_state[f"desc_{index}"] = im['item_description']
@@ -993,7 +1010,7 @@ else:
             items_data = []
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
-                st.markdown(f"**Item {i+1}**")
+                st.markdown(f"**Item Sequence {i+1}**")
                 
                 if f"desc_{i}" not in st.session_state:
                     st.session_state[f"desc_{i}"] = ex.get('desc', '')
@@ -1003,23 +1020,23 @@ else:
                     st.session_state[f"unit_{i}"] = ex.get('unit', 'Pcs')
                     st.session_state[f"rate_{i}"] = float(ex.get('rate', 0.0))
                 
-                sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
+                sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
                 
                 c1, c2, c3, c4, c_unit, c5 = st.columns([3, 1.2, 1.0, 1.2, 1.2, 1.4])
-                with c1: desc = st.text_input("Description *", key=f"desc_{i}")
+                with c1: desc = st.text_input("Material Description *", key=f"desc_{i}")
                 with c2: hsn = st.text_input("HSN Code *", key=f"hsn_{i}")
-                with c3: boxes = st.text_input("Boxes *", key=f"box_{i}")
-                with c4: qty = st.number_input("Qty *", min_value=0.0, format="%.3f", key=f"qty_{i}")
-                with c_unit: unit = st.selectbox("Unit *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"unit_{i}")
-                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, format="%.3f", key=f"rate_{i}")
+                with c3: boxes = st.text_input("Packages *", key=f"box_{i}")
+                with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"qty_{i}")
+                with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"unit_{i}")
+                with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"rate_{i}")
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
-            if st.button("🚀 Save & Print Challan", type="primary", key="save_print_btn"):
-                # 🔴 STRICT VALIDATION CHECK
+            if st.button("🚀 Finalize & Compile Dispatch Document", type="primary", key="save_print_btn"):
+                # 🔴 POPUP VALIDATION TRIGGER
                 req_fields = {
-                    "Dispatch To Name": party_name, "Party Address": party_address,
-                    "Party GSTIN": party_gstin, "Party State": party_state, "State Code": party_state_code,
+                    "Dispatch To Name": party_name, "Registered Address": party_address,
+                    "GSTIN Reference": party_gstin, "State Region": party_state, "Regional Code": party_state_code,
                     "Place of Supply": place_of_supply, "Challan No.": challan_no,
                     "Vehicle No.": vehicle_no, "Transport Mode": transport_mode, "Date & Time of Supply": date_of_supply
                 }
@@ -1027,10 +1044,10 @@ else:
                 
                 invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                 if invalid_items:
-                    missing.append(f"Proper Item Details (Desc, HSN, Boxes, Qty > 0, Rate > 0) for Row(s): {', '.join(invalid_items)}")
+                    missing.append(f"Incomplete Material Sequence (Description, HSN, Box, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
 
                 if missing:
-                    st.error(f"⚠️ Neeche diye gaye Mandatory (*) fields ko bharna zaroori hai:\n- " + "\n- ".join(missing))
+                    display_validation_error(missing)
                 else:
                     total_before = sum(item['amount'] for item in items_data)
                     total_tax = (total_before * 0.09) + (total_before * 0.09)
@@ -1043,7 +1060,7 @@ else:
                     items_html = ""
                     for idx, item in enumerate(items_data):
                         qty_val = float(item.get('qty', 0))
-                        qty_str = f"{qty_val:g}" # Removes trailing zeros
+                        qty_str = f"{qty_val:g}"
                         qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
                         
                         items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{float(item['rate']):.3f}</td><td style='text-align:right;'>{float(item['amount']):.2f}</td></tr>"
@@ -1103,10 +1120,10 @@ else:
                     
                     pdf_c = HTML(string=html_content).write_pdf()
                     
-                    st.success("✅ Challan Saved Successfully!")
+                    st.success("✅ Commercial Document Successfully Generated.")
                     c_dl, c_wa = st.columns([2, 2])
-                    c_dl.download_button(label="📄 Download Ready PDF", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
+                    c_dl.download_button(label="📄 Export Complete Document", data=pdf_c, file_name=f"Challan_{challan_no if challan_no else 'New'}.pdf", mime="application/pdf", type="primary")
                     
-                    wa_msg = f"Hello {party_name},%0A%0AHere are your dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Amount:* ₹{total_after:.2f}%0A%0AThank you!"
+                    wa_msg = f"Hello {party_name},%0A%0AHere are your official dispatch details from *{my_company['name']}*:%0A*Challan No:* {challan_no}%0A*Vehicle No:* {vehicle_no}%0A*Total Amount:* ₹{total_after:.2f}%0A%0AWe appreciate your business!"
                     wa_link = f"https://wa.me/?text={wa_msg}"
-                    c_wa.link_button("📲 Send on WhatsApp", wa_link)
+                    c_wa.link_button("📲 Forward via WhatsApp", wa_link)
