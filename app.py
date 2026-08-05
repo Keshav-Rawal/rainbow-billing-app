@@ -107,8 +107,11 @@ def init_db():
             try: cursor.execute("DELETE FROM tax_invoices WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
 
-            cursor.execute("SELECT COUNT(*) FROM users")
-            if cursor.fetchone()[0] == 0: cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "System Administrator"))
+            # 🔴 PERMANENT BOSS FIX 🔴
+            cursor.execute("SELECT * FROM users WHERE uid='boss'")
+            if not cursor.fetchone():
+                cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "System Administrator"))
+            
             conn.commit(); cursor.close(); conn.close()
             st.session_state.db_initialized = True
         except: pass
@@ -156,16 +159,32 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
-# 2. SESSION & AUTH MANAGER
+# 2. SESSION & AUTH MANAGER (WITH ANTI-LOGOUT SYNC)
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager")
-time.sleep(0.1)
+
+if "cookies_synced" not in st.session_state:
+    st.session_state.cookies_synced = True
+    st.markdown('''
+        <div style="text-align:center; padding: 50px;">
+            <h2 style="color: #1a4f8b;">🔄 Synchronizing Secure Session...</h2>
+            <p style="color: #64748b;">Please wait a moment while we verify your credentials.</p>
+        </div>
+    ''', unsafe_allow_html=True)
+    time.sleep(1)
+    st.rerun()
 
 if "auth_logged_in" not in st.session_state:
-    try: 
-        if cookie_manager.get(cookie="rainbow_erp_auth") == "verified":
-            st.session_state.update({"auth_logged_in": True, "auth_role": cookie_manager.get(cookie="rainbow_user_role"), "auth_name": cookie_manager.get(cookie="rainbow_user_name"), "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")})
-    except: st.session_state.auth_logged_in = False
+    auth_status = cookie_manager.get(cookie="rainbow_erp_auth")
+    if auth_status == "verified":
+        st.session_state.update({
+            "auth_logged_in": True, 
+            "auth_role": cookie_manager.get(cookie="rainbow_user_role"), 
+            "auth_name": cookie_manager.get(cookie="rainbow_user_name"), 
+            "auth_uid": cookie_manager.get(cookie="rainbow_user_uid")
+        })
+    else:
+        st.session_state.auth_logged_in = False
 
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
@@ -364,13 +383,11 @@ else:
                 del_confirm = st.checkbox("I understand this will wipe all their invoices, challans, and master data.")
                 if st.form_submit_button("🚨 Delete Client & Data", type="primary"):
                     if del_confirm:
-                        # Fetch the exact user record based on dropdown selection
                         selected_user = next(u for u in customer_users if f"{u['name']} (ID: {u['uid']})" == del_uid)
                         t_uid = selected_user['uid']
                         t_name = selected_user['name']
                         
                         try:
-                            # Wipe all traces of the specific client from all tables
                             execute_data("DELETE FROM users WHERE uid=%s", (t_uid,))
                             execute_data("DELETE FROM company_profiles WHERE uid=%s", (t_uid,))
                             execute_data("DELETE FROM party_master WHERE uid=%s", (t_uid,))
