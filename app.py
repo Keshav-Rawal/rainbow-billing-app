@@ -145,14 +145,17 @@ if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashb
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
     for idx, item in enumerate(items):
-        qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
-        items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item.get('hsn','')}</td><td style='text-align:center;'>{item.get('boxes','')}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
+        qty_val = float(item.get('qty', 0))
+        qty_str = f"{qty_val:g}" # Format to remove trailing zeros (e.g. 1.500 -> 1.5, 1.0 -> 1)
+        qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
+        
+        items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item.get('hsn','')}</td><td style='text-align:center; border: 1px solid #000;'>{item.get('boxes','')}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['rate']):.3f}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['amount']):.2f}</td></tr>"
     
     tax_rows = ""
     if tax_type == "IGST":
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: IGST @ 18%</td><td style='text-align:right;'>{igst:.2f}</td></tr>"
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
     else:
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>{sgst:.2f}</td></tr>"
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
         
     eway_html = f"<tr><td style='border:none; padding:4px;'><strong>E-Way Bill No.</strong></td><td style='border:none; padding:4px;'>: <strong>{fd.get('eway_bill_no','')}</strong></td></tr>" if fd.get('eway_bill_no') else ""
 
@@ -161,19 +164,19 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
         <div class="top-label">{copy_title}</div>
         <div class="container">
             <div class="header">
-                <div class="header-left"><strong>GSTIN :</strong> {comp['gstin']}<br><strong>State :</strong> {comp['state']} &nbsp; <strong>Code :</strong> {comp['state_code']}</div>
-                <div class="header-right"><strong>M. No. :</strong> {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}</div>
-                <h2 style="margin: 0; font-size: 16px; text-decoration: underline;">TAX INVOICE</h2>
+                <div class="header-left" style="color:black;"><strong>GSTIN :</strong> {comp['gstin']}<br><strong>State :</strong> {comp['state']} &nbsp; <strong>Code :</strong> {comp['state_code']}</div>
+                <div class="header-right" style="color:black;"><strong>M. No. :</strong> {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}</div>
+                <h2 style="margin: 0; font-size: 16px; text-decoration: underline; color:black;">TAX INVOICE</h2>
                 <h1 style="color: #1a4f8b; font-size: 32px; font-weight: 900; margin: 10px 0 5px 0;">{comp['name']}</h1>
-                <p style="font-weight: bold; margin: 2px 0;">{comp['tagline']}</p>
-                <p style="margin: 2px 0;">{comp['address']}</p>
-                <p style="margin: 2px 0; font-weight: bold;">{comp['contact']}</p>
+                <p style="font-weight: bold; margin: 2px 0; color:black;">{comp['tagline']}</p>
+                <p style="margin: 2px 0; color:black;">{comp['address']}</p>
+                <p style="margin: 2px 0; font-weight: bold; color:black;">{comp['contact']}</p>
                 <p style="margin: 5px 0 0 0; font-weight: bold; font-style: italic; color: #1a4f8b;">{comp['manufacturing']}</p>
             </div>
-            <table class="info-table">
+            <table class="info-table" style="color:black;">
                 <tr>
-                    <td style="width: 50%;">
-                        <table style="border:none; width:100%;">
+                    <td style="width: 50%; border: 1px solid #000;">
+                        <table style="border:none; width:100%; color:black;">
                             <tr><td style="border:none; padding:4px;"><strong>Invoice No.</strong></td><td style="border:none; padding:4px;">: <strong>{fd.get('invoice_no','')}</strong></td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Invoice Date</strong></td><td style="border:none; padding:4px;">: {fd.get('invoice_date','')}</td></tr>
                             {eway_html}
@@ -182,8 +185,8 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                             <tr><td style="border:none; padding:4px;"><strong>P. O. Date</strong></td><td style="border:none; padding:4px;">: {fd.get('po_date','')}</td></tr>
                         </table>
                     </td>
-                    <td style="width: 50%;">
-                        <table style="border:none; width:100%;">
+                    <td style="width: 50%; border: 1px solid #000;">
+                        <table style="border:none; width:100%; color:black;">
                             <tr><td style="border:none; padding:4px;"><strong>Transportation Mode</strong></td><td style="border:none; padding:4px;">: {fd.get('transport_mode','Road')}</td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Vehicle Number</strong></td><td style="border:none; padding:4px;">: {fd.get('vehicle_no','')}</td></tr>
                             <tr><td style="border:none; padding:4px;"><strong>Date & Time of Supply</strong></td><td style="border:none; padding:4px;">: {fd.get('date_of_supply','')}</td></tr>
@@ -192,19 +195,19 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                     </td>
                 </tr>
             </table>
-            <table class="info-table" style="border-top: none;">
+            <table class="info-table" style="border-top: none; color:black;">
                 <tr>
-                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold;">Bill to Party :</td>
-                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold;">Details of Consignee / Shipped to :</td>
+                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">Bill to Party :</td>
+                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">Details of Consignee / Shipped to :</td>
                 </tr>
                 <tr>
-                    <td style="vertical-align: top;">
+                    <td style="vertical-align: top; border: 1px solid #000;">
                         <strong>Name :</strong> {fd.get('bill_to_name','')}<br>
                         <strong>Address :</strong> {fd.get('bill_to_address','').replace(chr(10), '<br>')}<br><br>
                         <strong>GSTIN :</strong> {fd.get('bill_to_gstin','')}<br>
                         <strong>State :</strong> {fd.get('bill_to_state','')} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code :</strong> {fd.get('bill_to_state_code','')}
                     </td>
-                    <td style="vertical-align: top;">
+                    <td style="vertical-align: top; border: 1px solid #000;">
                         <strong>Name :</strong> {fd.get('ship_to_name','')}<br>
                         <strong>Address :</strong> {fd.get('ship_to_address','').replace(chr(10), '<br>')}<br><br>
                         <strong>GSTIN :</strong> {fd.get('ship_to_gstin','')}<br>
@@ -212,25 +215,25 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                     </td>
                 </tr>
             </table>
-            <table class="items-table">
+            <table class="items-table" style="color:black;">
                 <tr>
-                    <th style="width:5%;">Sr.<br>No.</th><th style="width:40%;">Product Description</th><th style="width:10%;">HSN<br>Code</th><th style="width:10%;">No. & Description<br>of Package</th><th style="width:10%;">Qty.</th><th style="width:10%;">Rate</th><th style="width:15%;">Taxable Amount</th>
+                    <th style="width:5%; border: 1px solid #000;">Sr.<br>No.</th><th style="width:35%; border: 1px solid #000;">Product Description</th><th style="width:10%; border: 1px solid #000;">HSN<br>Code</th><th style="width:10%; border: 1px solid #000;">No. & Description<br>of Package</th><th style="width:15%; border: 1px solid #000;">Total Qty.</th><th style="width:10%; border: 1px solid #000;">Rate</th><th style="width:15%; border: 1px solid #000;">Taxable Amount</th>
                 </tr>
                 {items_html}
-                <tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr class="spacer-row"><td style="border: 1px solid #000; border-bottom: none; border-top:none; height: 260px;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td></tr>
             </table>
-            <table style="border-top: 2px solid #1c2d42; width: 100%; border-collapse: collapse;">
+            <table style="border-top: 2px solid #000; width: 100%; border-collapse: collapse; color:black;">
                 <tr>
-                    <td rowspan="5" style="width:65%; padding: 10px; border-right: 2px solid #1c2d42; vertical-align: top;">
+                    <td rowspan="5" style="width:60%; padding: 10px; border: 1px solid #000; vertical-align: top;">
                         <strong>Total Invoice Amount in Words :</strong><br><span style="font-style: italic; font-size: 13px;">{amt_words}</span>
                     </td>
-                    <td style="width:20%; text-align:right; font-weight:bold; padding: 4px;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border-left: 1px solid #1c2d42;">{total_before:.2f}</td>
+                    <td style="width:25%; text-align:right; font-weight:bold; padding: 4px; border: 1px solid #000;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border: 1px solid #000;">{total_before:.2f}</td>
                 </tr>
                 {tax_rows}
-                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border-left: 1px solid #1c2d42;">{total_tax:.2f}</td></tr>
-                <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border-bottom: 2px solid #1c2d42;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border-left: 1px solid #1c2d42; border-bottom: 2px solid #1c2d42;">{total_after:.2f}</td></tr>
+                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">{total_tax:.2f}</td></tr>
+                <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">{total_after:.2f}</td></tr>
             </table>
-            <div class="footer">
+            <div class="footer" style="color:black;">
                 <div style="float: left; width: 60%; font-size: 11px;"><strong>Terms:</strong><br>All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                 <div style="float: right; width: 40%; text-align: center;"><span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br><strong>For RAINBOW INDUSTRIES</strong><br><br><br><br><span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span></div>
                 <div style="clear: both;"></div>
@@ -802,18 +805,20 @@ else:
                     st.session_state[f"id_{i}"] = ex.get('desc', '')
                     st.session_state[f"ih_{i}"] = ex.get('hsn', '')
                     st.session_state[f"ib_{i}"] = ex.get('boxes', '')
-                    st.session_state[f"iq_{i}"] = float(ex.get('qty', 0))
-                    st.session_state[f"ir_{i}"] = float(ex.get('rate', 0))
+                    st.session_state[f"iq_{i}"] = float(ex.get('qty', 0.0))
+                    st.session_state[f"iu_{i}"] = ex.get('unit', 'Pcs')
+                    st.session_state[f"ir_{i}"] = float(ex.get('rate', 0.0))
 
                 sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
                 
-                c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
+                c1, c2, c3, c4, c_unit, c5 = st.columns([3, 1.2, 1.0, 1.2, 1.2, 1.4])
                 with c1: desc = st.text_input("Description *", key=f"id_{i}")
                 with c2: hsn = st.text_input("HSN Code *", key=f"ih_{i}")
-                with c3: boxes = st.text_input("Boxes", key=f"ib_{i}")
-                with c4: qty = st.number_input("Qty *", min_value=0.0, key=f"iq_{i}")
-                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, key=f"ir_{i}")
-                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
+                with c3: boxes = st.text_input("Boxes *", key=f"ib_{i}")
+                with c4: qty = st.number_input("Qty *", min_value=0.0, format="%.3f", key=f"iq_{i}")
+                with c_unit: unit = st.selectbox("Unit *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"iu_{i}")
+                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, format="%.3f", key=f"ir_{i}")
+                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
             tax_type = st.radio("Tax Calculation:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
@@ -842,9 +847,9 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    empty_item_rows = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip()]
-                    if empty_item_rows:
-                        missing.append(f"Item Description & HSN Code for Row(s): {', '.join(empty_item_rows)}")
+                    invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
+                    if invalid_items:
+                        missing.append(f"Proper Item Details (Desc, HSN, Boxes, Qty > 0, Rate > 0) for Row(s): {', '.join(invalid_items)}")
 
                     if missing:
                         st.error(f"⚠️ Neeche diye gaye Mandatory (*) fields ko bharna zaroori hai:\n- " + "\n- ".join(missing))
@@ -994,18 +999,20 @@ else:
                     st.session_state[f"desc_{i}"] = ex.get('desc', '')
                     st.session_state[f"hsn_{i}"] = ex.get('hsn', '')
                     st.session_state[f"box_{i}"] = ex.get('boxes', '')
-                    st.session_state[f"qty_{i}"] = float(ex.get('qty', 0))
-                    st.session_state[f"rate_{i}"] = float(ex.get('rate', 0))
+                    st.session_state[f"qty_{i}"] = float(ex.get('qty', 0.0))
+                    st.session_state[f"unit_{i}"] = ex.get('unit', 'Pcs')
+                    st.session_state[f"rate_{i}"] = float(ex.get('rate', 0.0))
                 
                 sel_it = st.selectbox(f"Autofill Item {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
                 
-                c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
+                c1, c2, c3, c4, c_unit, c5 = st.columns([3, 1.2, 1.0, 1.2, 1.2, 1.4])
                 with c1: desc = st.text_input("Description *", key=f"desc_{i}")
                 with c2: hsn = st.text_input("HSN Code *", key=f"hsn_{i}")
-                with c3: boxes = st.text_input("Boxes", key=f"box_{i}")
-                with c4: qty = st.number_input("Qty *", min_value=0.0, key=f"qty_{i}")
-                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, key=f"rate_{i}")
-                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "rate": rate, "amount": qty * rate})
+                with c3: boxes = st.text_input("Boxes *", key=f"box_{i}")
+                with c4: qty = st.number_input("Qty *", min_value=0.0, format="%.3f", key=f"qty_{i}")
+                with c_unit: unit = st.selectbox("Unit *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"unit_{i}")
+                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, format="%.3f", key=f"rate_{i}")
+                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
                 st.markdown("---")
 
             if st.button("🚀 Save & Print Challan", type="primary", key="save_print_btn"):
@@ -1018,9 +1025,9 @@ else:
                 }
                 missing = [k for k, v in req_fields.items() if not str(v).strip()]
                 
-                empty_item_rows = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip()]
-                if empty_item_rows:
-                    missing.append(f"Item Description & HSN Code for Row(s): {', '.join(empty_item_rows)}")
+                invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
+                if invalid_items:
+                    missing.append(f"Proper Item Details (Desc, HSN, Boxes, Qty > 0, Rate > 0) for Row(s): {', '.join(invalid_items)}")
 
                 if missing:
                     st.error(f"⚠️ Neeche diye gaye Mandatory (*) fields ko bharna zaroori hai:\n- " + "\n- ".join(missing))
@@ -1035,8 +1042,11 @@ else:
                     
                     items_html = ""
                     for idx, item in enumerate(items_data):
-                        qty_display = f"{item['qty']} Pcs" if item['qty'] > 0 else ""
-                        items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{item['rate']:.2f}</td><td style='text-align:right;'>{item['amount']:.2f}</td></tr>"
+                        qty_val = float(item.get('qty', 0))
+                        qty_str = f"{qty_val:g}" # Removes trailing zeros
+                        qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
+                        
+                        items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{float(item['rate']):.3f}</td><td style='text-align:right;'>{float(item['amount']):.2f}</td></tr>"
 
                     eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
 
@@ -1077,11 +1087,11 @@ else:
                                 </tr>
                             </table>
                             <table class="items-table">
-                                <tr><th style="width:5%;">S.No</th><th style="width:35%;">Product Description</th><th style="width:10%;">HSN Code</th><th style="width:10%;">No of Box</th><th style="width:10%;">Total Qty</th><th style="width:12%;">Approx. Rate</th><th style="width:18%;">Approx. Amount</th></tr>
+                                <tr><th style="width:5%;">S.No</th><th style="width:35%;">Product Description</th><th style="width:10%;">HSN Code</th><th style="width:10%;">No of Box</th><th style="width:15%;">Total Qty.</th><th style="width:10%;">Rate</th><th style="width:15%;">Approx. Amount</th></tr>
                                 {items_html}<tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
                             </table>
                             <table style="border-top: 2px solid #1c2d42;">
-                                <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:20%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:20%; text-align:right;">{total_before:.2f}</td></tr>
+                                <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:25%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:15%; text-align:right;">{total_before:.2f}</td></tr>
                                 <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
                                 <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
                                 <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
