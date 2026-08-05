@@ -312,6 +312,26 @@ else:
         total_clients = sum(1 for u in all_users if u['role'] == 'customer')
         m1, m2 = st.columns(2); m1.metric("Active Tenants", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
+        
+        # 🚨 FACTORY RESET BUTTON (NUKE) 🚨
+        with st.expander("🚨 FACTORY RESET (DANGER ZONE)", expanded=False):
+            st.error("⚠️ WARNING: This will permanently delete ALL Clients, Items, Invoices, and Challans from the Database. The system will become completely fresh, ready for a new owner. Only the SuperAdmin login will remain.")
+            if st.button("🧨 Wipe Database & Factory Reset", type="primary", use_container_width=True):
+                try:
+                    execute_data("TRUNCATE TABLE party_master", ())
+                    execute_data("TRUNCATE TABLE item_master", ())
+                    execute_data("TRUNCATE TABLE tax_invoices", ())
+                    execute_data("TRUNCATE TABLE challans", ())
+                    execute_data("TRUNCATE TABLE company_profiles", ())
+                    execute_data("DELETE FROM users WHERE role != 'customer'", ()) # Will leave the superadmin intact
+                    st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
+                    time.sleep(2)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error executing reset: {e}")
+        
+        st.markdown("---")
+        
         with st.form("create_user_form", clear_on_submit=True):
             new_uid = st.text_input("Username / Login ID")
             new_pass = st.text_input("Password", type="password")
