@@ -107,7 +107,6 @@ def init_db():
             try: cursor.execute("DELETE FROM tax_invoices WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
 
-            # 🔴 PERMANENT BOSS FIX 🔴
             cursor.execute("SELECT * FROM users WHERE uid='boss'")
             if not cursor.fetchone():
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "System Administrator"))
@@ -159,7 +158,7 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
-# 2. SESSION & AUTH MANAGER (WITH ANTI-LOGOUT SYNC)
+# 2. SESSION & AUTH MANAGER
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager")
 
@@ -299,7 +298,6 @@ if not st.session_state.get("auth_logged_in"):
     u = st.text_input("User ID")
     p = st.text_input("Password", type="password")
     if st.button("Authenticate"):
-        # 🚨 STRICT BLANK FIELD VALIDATION 🚨
         if u.strip() == "" or p.strip() == "":
             st.warning("⚠️ Please enter both User ID and Password!")
         else:
@@ -341,7 +339,6 @@ else:
         m1, m2 = st.columns(2); m1.metric("Active Tenants", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
         
-        # 🚨 FACTORY RESET BUTTON (NUKE) 🚨
         with st.expander("🚨 FACTORY RESET (DANGER ZONE)", expanded=False):
             st.error("⚠️ WARNING: This will permanently delete ALL Clients, Items, Invoices, and Challans from the Database. The system will become completely fresh, ready for a new owner. Only the SuperAdmin login will remain.")
             if st.button("🧨 Wipe Database & Factory Reset", type="primary", use_container_width=True):
@@ -351,7 +348,7 @@ else:
                     execute_data("TRUNCATE TABLE tax_invoices", ())
                     execute_data("TRUNCATE TABLE challans", ())
                     execute_data("TRUNCATE TABLE company_profiles", ())
-                    execute_data("DELETE FROM users WHERE uid != 'boss'", ()) # Ab boss safe rahega
+                    execute_data("DELETE FROM users WHERE uid != 'boss'", ()) 
                     st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
                     time.sleep(2)
                     st.rerun()
@@ -372,7 +369,6 @@ else:
         st.subheader("👥 User Database")
         st.dataframe(pd.DataFrame(all_users), width="stretch")
         
-        # 🗑️ INDIVIDUAL CLIENT DELETION FEATURE 🗑️
         st.markdown("---")
         st.subheader("🗑️ Delete Client Account")
         customer_users = [u for u in all_users if u['role'].lower() == 'customer']
@@ -506,7 +502,7 @@ else:
                                 st.rerun()
 
         # ==========================================
-        # 3D DRAWING VIEWER & MEASUREMENT MODULE (UPGRADED)
+        # 3D DRAWING VIEWER & MEASUREMENT MODULE (UPGRADED + STEP HOLOGRAM)
         # ==========================================
         elif menu == "📐 3D Part Viewer":
             st.title("📐 Advanced CAD Analysis & Mass Estimator")
@@ -541,7 +537,6 @@ else:
                 with col_slider:
                     margin_pct = st.slider("⚙️ Production Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Configure machining tolerance or scrap margin to estimate actual production mass.")
 
-                # Updated acceptable types to include .step and .stp
                 uploaded_file = st.file_uploader("Upload Geometry (.stl, .obj, .step, .stp)", type=['stl', 'obj', 'step', 'stp'])
                 
                 if uploaded_file is not None:
@@ -554,8 +549,11 @@ else:
                         vol_mm3 = 0
                         area_mm2 = 0
                         bbox = [0, 0, 0]
-                        vertices = None
-                        faces = None
+                        
+                        # Unified variables for 3D plot
+                        vx, vy, vz = [], [], []
+                        fi, fj, fk = [], [], []
+                        has_mesh = False
                         
                         with st.spinner("Processing Geometry Engine..."):
                             if file_extension in ['step', 'stp']:
@@ -563,7 +561,7 @@ else:
                                     st.error("CadQuery is required to process STEP files.")
                                     st.stop()
                                     
-                                # Read STEP using CadQuery (OpenCASCADE engine)
+                                # Read STEP using CadQuery
                                 part = cq.importers.importStep(tmp_path)
                                 vol_mm3 = part.val().Volume()
                                 area_mm2 = part.val().Area()
@@ -574,16 +572,39 @@ else:
                                 
                                 st.success("✅ NATIVE CAD Processing Complete: Accurate Math Model Loaded.")
                                 
+                                # 🔴 NEW: STEP Auto-Meshing for Hologram
+                                try:
+                                    with st.spinner("Tessellating STEP file for 3D Hologram..."):
+                                        mesh_vertices, mesh_faces = part.val().tessellate(0.1) # 0.1 tolerance is a good balance of speed/quality
+                                        vx = [v.x for v in mesh_vertices]
+                                        vy = [v.y for v in mesh_vertices]
+                                        vz = [v.z for v in mesh_vertices]
+                                        fi = [f[0] for f in mesh_faces]
+                                        fj = [f[1] for f in mesh_faces]
+                                        fk = [f[2] for f in mesh_faces]
+                                        has_mesh = True
+                                except Exception as e:
+                                    st.warning("⚠️ Could not generate 3D Hologram for this specific complex STEP file, but calculations are exact.")
+                                
                             else:
                                 # Fallback to Trimesh for STL/OBJ
                                 mesh = trimesh.load(tmp_path)
                                 vol_mm3 = mesh.volume
                                 area_mm2 = mesh.area
                                 bbox = mesh.bounding_box.extents
-                                vertices = mesh.vertices
-                                faces = mesh.faces
+                                
+                                # Setup STL mesh arrays
+                                vx = mesh.vertices[:, 0]
+                                vy = mesh.vertices[:, 1]
+                                vz = mesh.vertices[:, 2]
+                                fi = mesh.faces[:, 0]
+                                fj = mesh.faces[:, 1]
+                                fk = mesh.faces[:, 2]
+                                has_mesh = True
+                                
                                 st.success(f"✅ Mesh geometry parsed successfully: {uploaded_file.name}")
                             
+                            # Final Math Processing
                             vol_cm3 = vol_mm3 * 0.001
                             density = MATERIALS[selected_material]
                             
@@ -599,16 +620,15 @@ else:
                             
                             st.markdown("---")
                             
-                            if file_extension in ['step', 'stp']:
-                                st.info("ℹ️ Note: Interactive visual rendering of mathematical STEP curves requires external meshing utilities. Calculation metrics above are mathematically exact.")
-                            else:
+                            # Render the Plotly Mesh if generated
+                            if has_mesh:
                                 st.subheader("🔍 Interactive Hologram")
                                 mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
 
                                 fig = go.Figure(data=[
                                     go.Mesh3d(
-                                        x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
-                                        i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                                        x=vx, y=vy, z=vz,
+                                        i=fi, j=fj, k=fk,
                                         color=mesh_color, opacity=0.85,
                                         lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
                                     )
@@ -860,7 +880,6 @@ else:
                 
                 c5, c6, c7, c8 = st.columns(4)
                 
-                # 🔴 P.O. DATE FIX: Ab yeh khali rahega default mein
                 po_date_val = None
                 if fd.get('po_date'):
                     try: po_date_val = datetime.datetime.strptime(fd.get('po_date'), '%d/%m/%Y').date()
@@ -982,7 +1001,6 @@ else:
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_inv', False):
-                    # SECURE SAVE EXECUTION (Triggered after confirmation)
                     total_before = sum(item['amount'] for item in items_data)
                     cgst = total_before * 0.09 if tax_mode == "CGST" else 0
                     sgst = total_before * 0.09 if tax_mode == "CGST" else 0
@@ -1024,7 +1042,6 @@ else:
                     st.rerun()
 
                 if st.button("🚀 Finalize & Compile PDF Document", type="primary"):
-                    # 🔴 POPUP VALIDATION TRIGGER
                     req_fields = {
                         "Invoice No.": invoice_no, "Transport Mode": transport_mode, 
                         "Vehicle No.": vehicle_no, "Date & Time of Supply": date_of_supply,
@@ -1178,7 +1195,6 @@ else:
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_chal', False):
-                    # SECURE SAVE EXECUTION (Triggered after confirmation)
                     total_before = sum(item['amount'] for item in items_data)
                     total_tax = (total_before * 0.09) + (total_before * 0.09)
                     total_after = total_before + total_tax
@@ -1259,7 +1275,6 @@ else:
                     st.rerun()
 
                 if st.button("🚀 Finalize & Compile Dispatch Document", type="primary", key="save_print_btn"):
-                    # 🔴 POPUP VALIDATION TRIGGER
                     req_fields = {
                         "Dispatch To Name": party_name, "Registered Address": party_address,
                         "GSTIN Reference": party_gstin, "State Region": party_state, "Regional Code": party_state_code,
