@@ -107,6 +107,7 @@ def init_db():
             try: cursor.execute("DELETE FROM tax_invoices WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
 
+            # 🔴 PERMANENT BOSS FIX 🔴
             cursor.execute("SELECT * FROM users WHERE uid='boss'")
             if not cursor.fetchone():
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "System Administrator"))
@@ -158,7 +159,7 @@ def get_ist_time():
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
 # ==========================================
-# 2. SESSION & AUTH MANAGER
+# 2. SESSION & AUTH MANAGER (WITH ANTI-LOGOUT SYNC)
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager")
 
@@ -298,6 +299,7 @@ if not st.session_state.get("auth_logged_in"):
     u = st.text_input("User ID")
     p = st.text_input("Password", type="password")
     if st.button("Authenticate"):
+        # 🚨 STRICT BLANK FIELD VALIDATION 🚨
         if u.strip() == "" or p.strip() == "":
             st.warning("⚠️ Please enter both User ID and Password!")
         else:
@@ -339,6 +341,7 @@ else:
         m1, m2 = st.columns(2); m1.metric("Active Tenants", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
         
+        # 🚨 FACTORY RESET BUTTON (NUKE) 🚨
         with st.expander("🚨 FACTORY RESET (DANGER ZONE)", expanded=False):
             st.error("⚠️ WARNING: This will permanently delete ALL Clients, Items, Invoices, and Challans from the Database. The system will become completely fresh, ready for a new owner. Only the SuperAdmin login will remain.")
             if st.button("🧨 Wipe Database & Factory Reset", type="primary", use_container_width=True):
@@ -348,7 +351,7 @@ else:
                     execute_data("TRUNCATE TABLE tax_invoices", ())
                     execute_data("TRUNCATE TABLE challans", ())
                     execute_data("TRUNCATE TABLE company_profiles", ())
-                    execute_data("DELETE FROM users WHERE uid != 'boss'", ()) 
+                    execute_data("DELETE FROM users WHERE uid != 'boss'", ()) # Ab boss safe rahega
                     st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
                     time.sleep(2)
                     st.rerun()
@@ -369,6 +372,7 @@ else:
         st.subheader("👥 User Database")
         st.dataframe(pd.DataFrame(all_users), width="stretch")
         
+        # 🗑️ INDIVIDUAL CLIENT DELETION FEATURE 🗑️
         st.markdown("---")
         st.subheader("🗑️ Delete Client Account")
         customer_users = [u for u in all_users if u['role'].lower() == 'customer']
@@ -502,15 +506,26 @@ else:
                                 st.rerun()
 
         # ==========================================
-        # 3D DRAWING VIEWER & MEASUREMENT MODULE
+        # 3D DRAWING VIEWER & MEASUREMENT MODULE (UPGRADED)
         # ==========================================
         elif menu == "📐 3D Part Viewer":
-            st.title("📐 CAD Geometry Analysis & Mass Estimator")
-            st.write("Upload **.STL or .OBJ** geometry files to calculate precise theoretical mass and configure production scrap margins.")
+            st.title("📐 Advanced CAD Analysis & Mass Estimator")
+            st.write("Upload **.STL, .OBJ, ya .STEP** geometry files to calculate precise theoretical mass and configure production scrap margins.")
             
+            # Check dependencies
+            cadquery_available = False
+            try:
+                import cadquery as cq
+                cadquery_available = True
+            except ImportError:
+                pass
+                
             if not HAS_3D:
                 st.error("⚠️ 3D Rendering dependencies missing! Please ensure backend supports `trimesh`, `plotly`, `scipy`, `networkx`.")
             else:
+                if not cadquery_available:
+                    st.warning("⚠️ CadQuery engine is missing. STEP files won't load natively. Fallback to STL/OBJ only.")
+
                 MATERIALS = {
                     "PP Plastic (Polypropylene)": 0.90,
                     "ABS Plastic": 1.04,
@@ -526,7 +541,8 @@ else:
                 with col_slider:
                     margin_pct = st.slider("⚙️ Production Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Configure machining tolerance or scrap margin to estimate actual production mass.")
 
-                uploaded_file = st.file_uploader("Upload Geometry (.stl, .obj)", type=['stl', 'obj'])
+                # Updated acceptable types to include .step and .stp
+                uploaded_file = st.file_uploader("Upload Geometry (.stl, .obj, .step, .stp)", type=['stl', 'obj', 'step', 'stp'])
                 
                 if uploaded_file is not None:
                     file_extension = uploaded_file.name.split('.')[-1].lower()
@@ -535,12 +551,38 @@ else:
                         tmp_path = tmp.name
                     
                     try:
-                        with st.spinner("Processing Mesh Vectors..."):
-                            mesh = trimesh.load(tmp_path)
-                            
-                            vol_mm3 = mesh.volume
-                            area_mm2 = mesh.area
-                            bbox = mesh.bounding_box.extents
+                        vol_mm3 = 0
+                        area_mm2 = 0
+                        bbox = [0, 0, 0]
+                        vertices = None
+                        faces = None
+                        
+                        with st.spinner("Processing Geometry Engine..."):
+                            if file_extension in ['step', 'stp']:
+                                if not cadquery_available:
+                                    st.error("CadQuery is required to process STEP files.")
+                                    st.stop()
+                                    
+                                # Read STEP using CadQuery (OpenCASCADE engine)
+                                part = cq.importers.importStep(tmp_path)
+                                vol_mm3 = part.val().Volume()
+                                area_mm2 = part.val().Area()
+                                
+                                # Bounding box extraction
+                                bb = part.val().BoundingBox()
+                                bbox = [bb.xlen, bb.ylen, bb.zlen]
+                                
+                                st.success("✅ NATIVE CAD Processing Complete: Accurate Math Model Loaded.")
+                                
+                            else:
+                                # Fallback to Trimesh for STL/OBJ
+                                mesh = trimesh.load(tmp_path)
+                                vol_mm3 = mesh.volume
+                                area_mm2 = mesh.area
+                                bbox = mesh.bounding_box.extents
+                                vertices = mesh.vertices
+                                faces = mesh.faces
+                                st.success(f"✅ Mesh geometry parsed successfully: {uploaded_file.name}")
                             
                             vol_cm3 = vol_mm3 * 0.001
                             density = MATERIALS[selected_material]
@@ -548,47 +590,44 @@ else:
                             theoretical_weight = vol_cm3 * density
                             practical_weight = theoretical_weight * (1 + (margin_pct / 100))
                             
-                            st.success(f"✅ Geometry parsed successfully: {uploaded_file.name}")
-                            
-                            st.subheader("📊 Analytical Metrics")
+                            st.subheader("📊 Analytical Metrics (Local & Secure)")
                             m1, m2, m3, m4 = st.columns(4)
                             m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
                             m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
                             m3.metric("Theoretical Mass", f"{theoretical_weight:,.2f} g")
-                            
                             m4.metric(f"🛠️ Production Mass (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
                             
                             st.markdown("---")
-                            st.subheader("🔍 Interactive Hologram")
                             
-                            vertices = mesh.vertices
-                            faces = mesh.faces
-                            
-                            mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
+                            if file_extension in ['step', 'stp']:
+                                st.info("ℹ️ Note: Interactive visual rendering of mathematical STEP curves requires external meshing utilities. Calculation metrics above are mathematically exact.")
+                            else:
+                                st.subheader("🔍 Interactive Hologram")
+                                mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
 
-                            fig = go.Figure(data=[
-                                go.Mesh3d(
-                                    x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
-                                    i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                                    color=mesh_color, opacity=0.85,
-                                    lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
+                                fig = go.Figure(data=[
+                                    go.Mesh3d(
+                                        x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2],
+                                        i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                                        color=mesh_color, opacity=0.85,
+                                        lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
+                                    )
+                                ])
+                                
+                                fig.update_layout(
+                                    scene=dict(
+                                        aspectmode='data',
+                                        xaxis=dict(visible=False),
+                                        yaxis=dict(visible=False),
+                                        zaxis=dict(visible=False)
+                                    ),
+                                    margin=dict(l=0, r=0, b=0, t=0),
+                                    height=550
                                 )
-                            ])
-                            
-                            fig.update_layout(
-                                scene=dict(
-                                    aspectmode='data',
-                                    xaxis=dict(visible=False),
-                                    yaxis=dict(visible=False),
-                                    zaxis=dict(visible=False)
-                                ),
-                                margin=dict(l=0, r=0, b=0, t=0),
-                                height=550
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig, use_container_width=True)
                             
                     except Exception as e:
-                        st.error(f"Execution Error: {e}. Please ensure you have uploaded a valid STL/OBJ file.")
+                        st.error(f"Execution Error: {e}. Please ensure you have uploaded a valid CAD file.")
                     finally:
                         os.remove(tmp_path)
 

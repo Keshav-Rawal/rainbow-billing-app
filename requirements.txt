@@ -9,3 +9,4 @@ plotly
 scipy
 networkx
 google-generativeai
+cadquery
