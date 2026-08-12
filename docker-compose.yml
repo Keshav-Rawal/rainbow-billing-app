@@ -1,9 +1,13 @@
 version: "3.8"
+
 services:
-  erp:
+  web:
     build: .
     ports:
-      - "80:8501"
-    restart: always
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - USER_DOCS_DIR=/app/Documents # Isko /app/Documents hi rehne dena
+    volumes:
+      # 🔴 YAHAN AAPKA DOWNLOADS FOLDER LINK HO GAYA HAI 🔴
+      - C:/Users/dell/Downloads:/app/Documents
