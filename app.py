@@ -285,6 +285,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                 <div style="float: left; width: 60%; font-size: 11px;"><strong>Terms:</strong><br>All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                 <div style="float: right; width: 40%; text-align: center;"><span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br><strong>For RAINBOW INDUSTRIES</strong><br><br><br><br><span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span></div>
                 <div style="clear: both;"></div>
+                <div style="text-align: center; font-size: 10px; font-style: italic; margin-top: 8px;">** This is a Computer Generated Invoice **</div>
             </div>
         </div>
     </div>
@@ -1228,7 +1229,7 @@ else:
                     .items-table th {{ background-color: #e5e8e8; text-align: center; border-bottom: 2px solid #1c2d42; border-top: 2px solid #1c2d42; }} 
                     .spacer-row td {{ height: 260px; border-top: none; border-bottom: none; }} 
                     .footer {{ padding: 10px; height: 100px; border-top: 2px solid #1c2d42; position: relative; }} 
-                    .signature {{ position: absolute; right: 20px; bottom: 10px; text-align: center; width: 200px; }}
+                    .signature {{ position: absolute; right: 20px; bottom: 15px; text-align: center; width: 200px; }}
                     </style></head>
                     <body>
                         <div class="container">
@@ -1260,7 +1261,11 @@ else:
                                 <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
                                 <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_after:.2f}</td></tr>
                             </table>
-                            <div class="footer"><p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p><div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div></div>
+                            <div class="footer">
+                                <p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p>
+                                <div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div>
+                                <div style="position: absolute; bottom: 5px; width: 100%; text-align: center; font-size: 10px; font-style: italic; left: 0;">** This is a Computer Generated Delivery Challan **</div>
+                            </div>
                         </div>
                     </body></html>"""
                     
