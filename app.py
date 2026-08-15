@@ -1,4 +1,4 @@
-import streamlit as st
+  import streamlit as st
 import extra_streamlit_components as stx
 import time
 import pandas as pd
@@ -411,7 +411,6 @@ else:
             st.info("No active clients available to delete.")
     
     elif role == "CUSTOMER":
-        # 🔴 CHANGED: Removed "📐 3D Part Viewer" from the list
         menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
@@ -844,7 +843,10 @@ else:
                 with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"iq_{i}")
                 with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"iu_{i}")
                 with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"ir_{i}")
-                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
+                
+                # 🔴 Bug fix calculation here 🔴
+                amount = round(qty * rate, 2)
+                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
 
             tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
@@ -861,16 +863,15 @@ else:
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_inv', False):
-                    total_before = sum(item['amount'] for item in items_data)
-                    cgst = total_before * 0.09 if tax_mode == "CGST" else 0
-                    sgst = total_before * 0.09 if tax_mode == "CGST" else 0
-                    igst = total_before * 0.18 if tax_mode == "IGST" else 0
-                    total_tax = cgst + sgst + igst
-                    total_after = total_before + total_tax
+                    # 🔴 Apply round() bug fix 🔴
+                    total_before = round(sum(item['amount'] for item in items_data), 2)
+                    cgst = round(total_before * 0.09, 2) if tax_mode == "CGST" else 0.0
+                    sgst = round(total_before * 0.09, 2) if tax_mode == "CGST" else 0.0
+                    igst = round(total_before * 0.18, 2) if tax_mode == "IGST" else 0.0
+                    total_tax = round(cgst + sgst + igst, 2)
+                    total_after = round(total_before + total_tax, 2)
                     
-                    # 🔴 CUSTOM INDIAN CURRENCY CALL 🔴
                     amt_words = get_indian_currency_words(total_after)
-                    
                     items_json = json.dumps(items_data)
 
                     current_fd = {
@@ -1045,7 +1046,10 @@ else:
                 with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"qty_{i}")
                 with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"unit_{i}")
                 with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"rate_{i}")
-                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": qty * rate})
+                
+                # 🔴 Bug fix calculation here 🔴
+                amount = round(qty * rate, 2)
+                items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
 
             if 'pdf_chal' in st.session_state:
@@ -1058,11 +1062,13 @@ else:
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_chal', False):
-                    total_before = sum(item['amount'] for item in items_data)
-                    total_tax = (total_before * 0.09) + (total_before * 0.09)
-                    total_after = total_before + total_tax
+                    # 🔴 Apply round() bug fix 🔴
+                    total_before = round(sum(item['amount'] for item in items_data), 2)
+                    cgst_val = round(total_before * 0.09, 2)
+                    sgst_val = round(total_before * 0.09, 2)
+                    total_tax = round(cgst_val + sgst_val, 2)
+                    total_after = round(total_before + total_tax, 2)
                     
-                    # 🔴 CUSTOM INDIAN CURRENCY CALL 🔴
                     amt_words = get_indian_currency_words(total_after)
                     
                     if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
@@ -1120,8 +1126,8 @@ else:
                             </table>
                             <table style="border-top: 2px solid #1c2d42;">
                                 <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:25%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:15%; text-align:right;">{total_before:.2f}</td></tr>
-                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
-                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{total_before * 0.09:.2f}</td></tr>
+                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{cgst_val:.2f}</td></tr>
+                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{sgst_val:.2f}</td></tr>
                                 <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
                                 <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_after:.2f}</td></tr>
                             </table>
