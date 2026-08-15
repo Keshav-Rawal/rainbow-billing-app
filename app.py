@@ -60,7 +60,7 @@ else:
             st.markdown(f"- **{item}**")
 
 # ==========================================
-# 1. SAFE DATABASE FUNCTIONS
+# 1. SAFE DATABASE FUNCTIONS & UTILS
 # ==========================================
 def get_connection():
     return mysql.connector.connect(
@@ -156,6 +156,20 @@ def get_next_auto_no(table_name, col_name, created_by):
 def get_ist_time():
     ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
+
+# 🔴 NEW FUNCTION: INDIAN CURRENCY WORDS BUG FIX 🔴
+def get_indian_currency_words(amount):
+    amount = round(float(amount), 2)
+    rupees = int(amount)
+    paise = int(round((amount - rupees) * 100))
+    
+    rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title() + " Rupees"
+    
+    if paise > 0:
+        paise_str = num2words(paise, lang='en_IN').replace(',', '').title()
+        return f"{rupees_str} And {paise_str} Paise Only"
+    else:
+        return f"{rupees_str} Only"
 
 # ==========================================
 # 2. SESSION & AUTH MANAGER
@@ -282,11 +296,13 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                 <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">{total_after:.2f}</td></tr>
             </table>
             <div class="footer" style="color:black;">
-                <div style="float: left; width: 60%; font-size: 11px;"><strong>Terms:</strong><br>All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                 <div style="float: right; width: 40%; text-align: center;"><span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br><strong>For RAINBOW INDUSTRIES</strong><br><br><br><br><span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span></div>
                 <div style="clear: both;"></div>
-                <div style="text-align: center; font-size: 10px; font-style: italic; margin-top: 8px;">** This is a Computer Generated Invoice **</div>
             </div>
+        </div>
+        <div style="margin-top: 2px; width: 100%; color: black; line-height: 1.2;">
+            <div style="text-align: center; font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Invoice **</div>
+            <div style="font-size: 9px;"><strong>Terms:</strong> All disputes are subject to G. B. Nagar Jurisdiction only.</div>
         </div>
     </div>
     """
@@ -1008,7 +1024,10 @@ else:
                     igst = total_before * 0.18 if tax_mode == "IGST" else 0
                     total_tax = cgst + sgst + igst
                     total_after = total_before + total_tax
-                    amt_words = num2words(total_after, lang='en_IN').title() + " Only."
+                    
+                    # 🔴 CUSTOM INDIAN CURRENCY CALL 🔴
+                    amt_words = get_indian_currency_words(total_after)
+                    
                     items_json = json.dumps(items_data)
 
                     current_fd = {
@@ -1199,7 +1218,9 @@ else:
                     total_before = sum(item['amount'] for item in items_data)
                     total_tax = (total_before * 0.09) + (total_before * 0.09)
                     total_after = total_before + total_tax
-                    amt_words = num2words(total_after, lang='en_IN').title() + " Only."
+                    
+                    # 🔴 CUSTOM INDIAN CURRENCY CALL 🔴
+                    amt_words = get_indian_currency_words(total_after)
                     
                     if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
                     else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, eway_bill_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
@@ -1264,8 +1285,11 @@ else:
                             <div class="footer">
                                 <p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p>
                                 <div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div>
-                                <div style="position: absolute; bottom: 5px; width: 100%; text-align: center; font-size: 10px; font-style: italic; left: 0;">** This is a Computer Generated Delivery Challan **</div>
                             </div>
+                        </div>
+                        <div style="margin-top: 2px; width: 100%; color: #1c2d42; line-height: 1.2;">
+                            <div style="text-align: center; font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Delivery Challan **</div>
+                            <div style="font-size: 9px;"><strong>Terms:</strong> All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                         </div>
                     </body></html>"""
                     
