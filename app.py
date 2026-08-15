@@ -12,14 +12,6 @@ import re
 import tempfile
 import os
 
-# 3D Libraries Load Check
-try:
-    import trimesh
-    import plotly.graph_objects as go
-    HAS_3D = True
-except ImportError:
-    HAS_3D = False
-
 # AI Library Load Check
 try:
     import google.generativeai as genai
@@ -157,7 +149,7 @@ def get_ist_time():
     ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
-# 🔴 NEW FUNCTION: INDIAN CURRENCY WORDS BUG FIX 🔴
+# 🔴 CUSTOM INDIAN CURRENCY CALL 🔴
 def get_indian_currency_words(amount):
     amount = round(float(amount), 2)
     rupees = int(amount)
@@ -419,7 +411,8 @@ else:
             st.info("No active clients available to delete.")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📐 3D Part Viewer", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        # 🔴 CHANGED: Removed "📐 3D Part Viewer" from the list
+        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Partner Dashboard")
@@ -517,156 +510,6 @@ else:
                             if col_b.button("Purge", key=f"del_it_{itm['id']}"):
                                 execute_data("DELETE FROM item_master WHERE id=%s", (itm['id'],))
                                 st.rerun()
-
-        # ==========================================
-        # 3D DRAWING VIEWER & MEASUREMENT MODULE (UPGRADED + STEP HOLOGRAM)
-        # ==========================================
-        elif menu == "📐 3D Part Viewer":
-            st.title("📐 Advanced CAD Analysis & Mass Estimator")
-            st.write("Upload **.STL, .OBJ, ya .STEP** geometry files to calculate precise theoretical mass and configure production scrap margins.")
-            
-            # Check dependencies
-            cadquery_available = False
-            try:
-                import cadquery as cq
-                cadquery_available = True
-            except ImportError:
-                pass
-                
-            if not HAS_3D:
-                st.error("⚠️ 3D Rendering dependencies missing! Please ensure backend supports `trimesh`, `plotly`, `scipy`, `networkx`.")
-            else:
-                if not cadquery_available:
-                    st.warning("⚠️ CadQuery engine is missing. STEP files won't load natively. Fallback to STL/OBJ only.")
-
-                MATERIALS = {
-                    "PP Plastic (Polypropylene)": 0.90,
-                    "ABS Plastic": 1.04,
-                    "Aluminium": 2.70,
-                    "SS304 (Stainless Steel)": 7.93,
-                    "Copper": 8.96,
-                    "Nylon": 1.15,
-                }
-
-                col_mat, col_slider = st.columns([1, 1])
-                with col_mat:
-                    selected_material = st.selectbox("Material Density Profile", list(MATERIALS.keys()))
-                with col_slider:
-                    margin_pct = st.slider("⚙️ Production Scrap Margin (%)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="Configure machining tolerance or scrap margin to estimate actual production mass.")
-
-                uploaded_file = st.file_uploader("Upload Geometry (.stl, .obj, .step, .stp)", type=['stl', 'obj', 'step', 'stp'])
-                
-                if uploaded_file is not None:
-                    file_extension = uploaded_file.name.split('.')[-1].lower()
-                    with tempfile.NamedTemporaryFile(delete=False, suffix="." + file_extension) as tmp:
-                        tmp.write(uploaded_file.getvalue())
-                        tmp_path = tmp.name
-                    
-                    try:
-                        vol_mm3 = 0
-                        area_mm2 = 0
-                        bbox = [0, 0, 0]
-                        
-                        # Unified variables for 3D plot
-                        vx, vy, vz = [], [], []
-                        fi, fj, fk = [], [], []
-                        has_mesh = False
-                        
-                        with st.spinner("Processing Geometry Engine..."):
-                            if file_extension in ['step', 'stp']:
-                                if not cadquery_available:
-                                    st.error("CadQuery is required to process STEP files.")
-                                    st.stop()
-                                    
-                                # Read STEP using CadQuery
-                                part = cq.importers.importStep(tmp_path)
-                                vol_mm3 = part.val().Volume()
-                                area_mm2 = part.val().Area()
-                                
-                                # Bounding box extraction
-                                bb = part.val().BoundingBox()
-                                bbox = [bb.xlen, bb.ylen, bb.zlen]
-                                
-                                st.success("✅ NATIVE CAD Processing Complete: Accurate Math Model Loaded.")
-                                
-                                # 🔴 NEW: STEP Auto-Meshing for Hologram
-                                try:
-                                    with st.spinner("Tessellating STEP file for 3D Hologram..."):
-                                        mesh_vertices, mesh_faces = part.val().tessellate(0.1) # 0.1 tolerance is a good balance of speed/quality
-                                        vx = [v.x for v in mesh_vertices]
-                                        vy = [v.y for v in mesh_vertices]
-                                        vz = [v.z for v in mesh_vertices]
-                                        fi = [f[0] for f in mesh_faces]
-                                        fj = [f[1] for f in mesh_faces]
-                                        fk = [f[2] for f in mesh_faces]
-                                        has_mesh = True
-                                except Exception as e:
-                                    st.warning("⚠️ Could not generate 3D Hologram for this specific complex STEP file, but calculations are exact.")
-                                
-                            else:
-                                # Fallback to Trimesh for STL/OBJ
-                                mesh = trimesh.load(tmp_path)
-                                vol_mm3 = mesh.volume
-                                area_mm2 = mesh.area
-                                bbox = mesh.bounding_box.extents
-                                
-                                # Setup STL mesh arrays
-                                vx = mesh.vertices[:, 0]
-                                vy = mesh.vertices[:, 1]
-                                vz = mesh.vertices[:, 2]
-                                fi = mesh.faces[:, 0]
-                                fj = mesh.faces[:, 1]
-                                fk = mesh.faces[:, 2]
-                                has_mesh = True
-                                
-                                st.success(f"✅ Mesh geometry parsed successfully: {uploaded_file.name}")
-                            
-                            # Final Math Processing
-                            vol_cm3 = vol_mm3 * 0.001
-                            density = MATERIALS[selected_material]
-                            
-                            theoretical_weight = vol_cm3 * density
-                            practical_weight = theoretical_weight * (1 + (margin_pct / 100))
-                            
-                            st.subheader("📊 Analytical Metrics (Local & Secure)")
-                            m1, m2, m3, m4 = st.columns(4)
-                            m1.metric("Dimensions (L x W x H)", f"{bbox[0]:.1f} x {bbox[1]:.1f} x {bbox[2]:.1f} mm")
-                            m2.metric("Surface Area", f"{area_mm2:,.0f} mm²")
-                            m3.metric("Theoretical Mass", f"{theoretical_weight:,.2f} g")
-                            m4.metric(f"🛠️ Production Mass (+{margin_pct}%)", f"{practical_weight:,.2f} g", delta_color="normal")
-                            
-                            st.markdown("---")
-                            
-                            # Render the Plotly Mesh if generated
-                            if has_mesh:
-                                st.subheader("🔍 Interactive Hologram")
-                                mesh_color = 'silver' if "Aluminium" in selected_material or "SS304" in selected_material else '#1a4f8b'
-
-                                fig = go.Figure(data=[
-                                    go.Mesh3d(
-                                        x=vx, y=vy, z=vz,
-                                        i=fi, j=fj, k=fk,
-                                        color=mesh_color, opacity=0.85,
-                                        lighting=dict(ambient=0.5, diffuse=1, roughness=0.5, specular=0.5)
-                                    )
-                                ])
-                                
-                                fig.update_layout(
-                                    scene=dict(
-                                        aspectmode='data',
-                                        xaxis=dict(visible=False),
-                                        yaxis=dict(visible=False),
-                                        zaxis=dict(visible=False)
-                                    ),
-                                    margin=dict(l=0, r=0, b=0, t=0),
-                                    height=550
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                            
-                    except Exception as e:
-                        st.error(f"Execution Error: {e}. Please ensure you have uploaded a valid CAD file.")
-                    finally:
-                        os.remove(tmp_path)
 
         # ==========================================
         # AI ASSISTANT MODULE (MULTI-LINGUAL CAPABLE)
