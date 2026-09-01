@@ -155,7 +155,6 @@ def get_indian_currency_words(amount):
     rupees = int(amount)
     paise = int(round((amount - rupees) * 100))
     
-    # Yahan se 'Rupees' word hata diya gaya hai
     rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title().replace(' And ', ' ')
     
     if paise > 0:
@@ -214,6 +213,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
         
     eway_html = f"<tr><td style='border:none; padding:4px;'><strong>E-Way Bill No.</strong></td><td style='border:none; padding:4px;'>: <strong>{fd.get('eway_bill_no','')}</strong></td></tr>" if fd.get('eway_bill_no') else ""
 
+    # 🔴 BORDER KE BAHAR AUR CENTER ALIGN FIX YAHAN HUA HAI 🔴
     return f"""
     <div class="page-container">
         <div class="top-label">{copy_title}</div>
@@ -293,10 +293,10 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                 <div style="clear: both;"></div>
             </div>
         </div>
-        <div style="margin-top: 2px; width: 100%; color: black; line-height: 1.2;">
-            <div style="text-align: center; font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Invoice **</div>
-            <div style="font-size: 9px;"><strong>Terms:</strong> All disputes are subject to G. B. Nagar Jurisdiction only.</div>
-        </div>
+    </div>
+    <div style="margin-top: 4px; width: 100%; color: black; line-height: 1.2; text-align: center;">
+        <div style="font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Invoice **</div>
+        <div style="font-size: 10px;">All disputes are subject to G. B. Nagar Jurisdiction only.</div>
     </div>
     """
 
@@ -1081,6 +1081,7 @@ else:
 
                     eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
 
+                    # 🔴 BORDER KE BAHAR AUR CENTER ALIGN FIX YAHAN BHI HUA HAI 🔴
                     html_content = f"""
                     <!DOCTYPE html><html><head><style>
                     @page {{ size: A4; margin: 10mm 5mm; }} 
@@ -1133,9 +1134,9 @@ else:
                                 <div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div>
                             </div>
                         </div>
-                        <div style="margin-top: 2px; width: 100%; color: #1c2d42; line-height: 1.2;">
-                            <div style="text-align: center; font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Delivery Challan **</div>
-                            <div style="font-size: 9px;"><strong>Terms:</strong> All disputes are subject to G. B. Nagar Jurisdiction only.</div>
+                        <div style="margin-top: 4px; width: 100%; color: #1c2d42; line-height: 1.2; text-align: center;">
+                            <div style="font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Delivery Challan **</div>
+                            <div style="font-size: 10px;">All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                         </div>
                     </body></html>"""
                     
