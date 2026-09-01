@@ -149,13 +149,14 @@ def get_ist_time():
     ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
-# 🔴 CUSTOM INDIAN CURRENCY CALL (Fixed 'And' Bug) 🔴
+# 🔴 CUSTOM INDIAN CURRENCY CALL (Removed 'Rupees') 🔴
 def get_indian_currency_words(amount):
     amount = round(float(amount), 2)
     rupees = int(amount)
     paise = int(round((amount - rupees) * 100))
     
-    rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title().replace(' And ', ' ') + " Rupees"
+    # Yahan se 'Rupees' word hata diya gaya hai
+    rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title().replace(' And ', ' ')
     
     if paise > 0:
         paise_str = num2words(paise, lang='en_IN').replace(',', '').title().replace(' And ', ' ')
