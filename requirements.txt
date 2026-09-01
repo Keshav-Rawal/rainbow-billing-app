@@ -1,12 +1,7 @@
-streamlit
+streamlit>=1.35.0
 extra-streamlit-components
-weasyprint
 pandas
-mysql-connector-python
+weasyprint
 num2words
-trimesh
-plotly
-scipy
-networkx
+mysql-connector-python
 google-generativeai
-cadquery

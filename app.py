@@ -149,16 +149,16 @@ def get_ist_time():
     ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
-# 🔴 CUSTOM INDIAN CURRENCY CALL 🔴
+# 🔴 CUSTOM INDIAN CURRENCY CALL (Fixed 'And' Bug) 🔴
 def get_indian_currency_words(amount):
     amount = round(float(amount), 2)
     rupees = int(amount)
     paise = int(round((amount - rupees) * 100))
     
-    rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title() + " Rupees"
+    rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title().replace(' And ', ' ') + " Rupees"
     
     if paise > 0:
-        paise_str = num2words(paise, lang='en_IN').replace(',', '').title()
+        paise_str = num2words(paise, lang='en_IN').replace(',', '').title().replace(' And ', ' ')
         return f"{rupees_str} And {paise_str} Paise Only"
     else:
         return f"{rupees_str} Only"
@@ -844,7 +844,6 @@ else:
                 with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"iu_{i}")
                 with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"ir_{i}")
                 
-                # 🔴 Bug fix calculation here 🔴
                 amount = round(qty * rate, 2)
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
@@ -863,7 +862,6 @@ else:
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_inv', False):
-                    # 🔴 Apply round() bug fix 🔴
                     total_before = round(sum(item['amount'] for item in items_data), 2)
                     cgst = round(total_before * 0.09, 2) if tax_mode == "CGST" else 0.0
                     sgst = round(total_before * 0.09, 2) if tax_mode == "CGST" else 0.0
@@ -1047,7 +1045,6 @@ else:
                 with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"unit_{i}")
                 with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"rate_{i}")
                 
-                # 🔴 Bug fix calculation here 🔴
                 amount = round(qty * rate, 2)
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
@@ -1062,7 +1059,6 @@ else:
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_chal', False):
-                    # 🔴 Apply round() bug fix 🔴
                     total_before = round(sum(item['amount'] for item in items_data), 2)
                     cgst_val = round(total_before * 0.09, 2)
                     sgst_val = round(total_before * 0.09, 2)
