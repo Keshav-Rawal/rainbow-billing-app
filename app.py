@@ -213,7 +213,6 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
         
     eway_html = f"<tr><td style='border:none; padding:4px;'><strong>E-Way Bill No.</strong></td><td style='border:none; padding:4px;'>: <strong>{fd.get('eway_bill_no','')}</strong></td></tr>" if fd.get('eway_bill_no') else ""
 
-    # 🔴 BORDER KE BAHAR AUR CENTER ALIGN FIX YAHAN HUA HAI 🔴
     return f"""
     <div class="page-container">
         <div class="top-label">{copy_title}</div>
@@ -709,20 +708,8 @@ else:
             def_inv_no = fd.get('invoice_no', get_next_auto_no('tax_invoices', 'invoice_no', safe_name)) if mode == "INSERT" else fd.get('invoice_no','')
             def_date_time = get_ist_time()
 
-            dash_party = st.session_state.pop('sel_inv_p', None)
-            party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
-            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
-
-            if dash_party and dash_party != "-- Select Business Partner --":
-                pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
-                if pm:
-                    st.session_state.b1 = pm['party_name']
-                    st.session_state.b2 = pm['address']
-                    st.session_state.b3 = pm['gstin']
-                    st.session_state.b4 = pm['state']
-                    st.session_state.b5 = pm['state_code']
-                    st.session_state.pos_inv = pm.get('place_of_supply', '')
-            elif 'b1' not in st.session_state:
+            # Restore b1 if it was previously set, else load from form_data
+            if 'b1' not in st.session_state:
                 st.session_state.b1 = fd.get('bill_to_name', '')
                 st.session_state.b2 = fd.get('bill_to_address', '')
                 st.session_state.b3 = fd.get('bill_to_gstin', '')
@@ -755,21 +742,28 @@ else:
                 with col_b:
                     st.markdown("**Bill-To Entity:**")
                     
-                    def autofill_inv_party():
-                        sel = st.session_state.sel_inv_p_widget
-                        if sel != "-- Select Business Partner --":
-                            pm = next((p for p in parties_db if p['party_name'] == sel), None)
-                            if pm:
-                                st.session_state.b1 = pm['party_name']
-                                st.session_state.b2 = pm['address']
-                                st.session_state.b3 = pm['gstin']
-                                st.session_state.b4 = pm['state']
-                                st.session_state.b5 = pm['state_code']
-                                st.session_state.pos_inv = pm.get('place_of_supply', '')
-                        else:
-                            for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
-
-                    sel_p = st.selectbox("Reference Master Data", party_names, index=default_idx, key="sel_inv_p_widget", on_change=autofill_inv_party)
+                    # --- NAYA 2-STEP DROPDOWN LOGIC ---
+                    unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
+                    p_names_list = ["-- Select Business Partner --"] + unique_parties
+                    
+                    sel_company = st.selectbox("1. Select Company", p_names_list, key="sel_company_inv")
+                    
+                    if sel_company != "-- Select Business Partner --":
+                        company_records = [p for p in parties_db if p['party_name'] == sel_company]
+                        address_options = [p['address'] for p in company_records]
+                        sel_address = st.selectbox("2. Select Branch Address", address_options, key="sel_address_inv")
+                        
+                        pm = next((p for p in company_records if p['address'] == sel_address), None)
+                        if pm:
+                            st.session_state.b1 = pm['party_name']
+                            st.session_state.b2 = pm['address']
+                            st.session_state.b3 = pm['gstin']
+                            st.session_state.b4 = pm['state']
+                            st.session_state.b5 = pm['state_code']
+                            st.session_state.pos_inv = pm.get('place_of_supply', '')
+                    else:
+                        for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
+                    # ----------------------------------
                         
                     b_name = st.text_input("Partner Name *", key="b1")
                     b_add = st.text_area("Registered Address *", key="b2", height=68)
@@ -804,9 +798,8 @@ else:
                     s_scode = st.text_input("Regional Code * ", key="s5", disabled=same_as)
 
             st.subheader("📦 Line Items")
-            if sel_p != "-- Select Business Partner --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
-            else: items_db = []
-                
+            # Items loaded using the raw text input value to ensure custom names match mapping if applicable
+            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, b_name)) if b_name else []
             item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
             
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
@@ -945,20 +938,7 @@ else:
             def_chal_no = fd.get('challan_no', get_next_auto_no('challans', 'challan_no', safe_name)) if mode == "INSERT" else fd.get('challan_no','')
             def_date_time = get_ist_time()
 
-            dash_party = st.session_state.pop('sel_chal_p', None)
-            party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
-            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
-            
-            if dash_party and dash_party != "-- Select Business Partner --":
-                pm = next((p for p in parties_db if p['party_name'] == dash_party), None)
-                if pm:
-                    st.session_state.p_name = pm['party_name']
-                    st.session_state.p_add = pm['address']
-                    st.session_state.p_gst = pm['gstin']
-                    st.session_state.p_state = pm['state']
-                    st.session_state.p_scode = pm['state_code']
-                    st.session_state.pos_chal = pm.get('place_of_supply', '')
-            elif 'p_name' not in st.session_state:
+            if 'p_name' not in st.session_state:
                 st.session_state.p_name = fd.get('party_name', '')
                 st.session_state.p_add = fd.get('party_address', '')
                 st.session_state.p_gst = fd.get('party_gstin', '')
@@ -970,21 +950,28 @@ else:
             with col1:
                 st.markdown("**Dispatch Logistics Details:**")
                 
-                def autofill_chal_party():
-                    sel = st.session_state.sel_chal_p_widget
-                    if sel != "-- Select Business Partner --":
-                        pm = next((p for p in parties_db if p['party_name'] == sel), None)
-                        if pm:
-                            st.session_state.p_name = pm['party_name']
-                            st.session_state.p_add = pm['address']
-                            st.session_state.p_gst = pm['gstin']
-                            st.session_state.p_state = pm['state']
-                            st.session_state.p_scode = pm['state_code']
-                            st.session_state.pos_chal = pm.get('place_of_supply', '')
-                    else:
-                        for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
+                # --- NAYA 2-STEP DROPDOWN LOGIC ---
+                unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
+                p_names_list = ["-- Select Business Partner --"] + unique_parties
                 
-                sel_p = st.selectbox("Reference Master Data", party_names, index=default_idx, key="sel_chal_p_widget", on_change=autofill_chal_party)
+                sel_company = st.selectbox("1. Select Company", p_names_list, key="sel_company_chal")
+                
+                if sel_company != "-- Select Business Partner --":
+                    company_records = [p for p in parties_db if p['party_name'] == sel_company]
+                    address_options = [p['address'] for p in company_records]
+                    sel_address = st.selectbox("2. Select Branch Address", address_options, key="sel_address_chal")
+                    
+                    pm = next((p for p in company_records if p['address'] == sel_address), None)
+                    if pm:
+                        st.session_state.p_name = pm['party_name']
+                        st.session_state.p_add = pm['address']
+                        st.session_state.p_gst = pm['gstin']
+                        st.session_state.p_state = pm['state']
+                        st.session_state.p_scode = pm['state_code']
+                        st.session_state.pos_chal = pm.get('place_of_supply', '')
+                else:
+                    for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
+                # ----------------------------------
                         
                 party_name = st.text_input("Dispatch To Name *", key="p_name")
                 party_address = st.text_area("Registered Address *", key="p_add")
@@ -1005,9 +992,8 @@ else:
                 date_of_supply = st.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
 
             st.subheader("📦 Line Items")
-            if sel_p != "-- Select Business Partner --": items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, sel_p))
-            else: items_db = []
-                
+            # Items loaded using the raw text input value
+            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, party_name)) if party_name else []
             item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
 
             c_btn1, c_btn2, _ = st.columns([2, 2, 8])
@@ -1081,7 +1067,6 @@ else:
 
                     eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
 
-                    # 🔴 BORDER KE BAHAR AUR CENTER ALIGN FIX YAHAN BHI HUA HAI 🔴
                     html_content = f"""
                     <!DOCTYPE html><html><head><style>
                     @page {{ size: A4; margin: 10mm 5mm; }} 
