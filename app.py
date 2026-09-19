@@ -80,6 +80,12 @@ def init_db():
                 )
             """)
             
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS purchase_orders (
+                    id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), po_date VARCHAR(20), po_no VARCHAR(50), vendor_name VARCHAR(100), vendor_address TEXT, vendor_gstin VARCHAR(50), vendor_state VARCHAR(50), vendor_state_code VARCHAR(20), delivery_date VARCHAR(50), payment_terms VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL
+                )
+            """)
+            
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
@@ -97,6 +103,8 @@ def init_db():
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
             try: cursor.execute("DELETE FROM tax_invoices WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
+            except: pass
+            try: cursor.execute("DELETE FROM purchase_orders WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
 
             cursor.execute("SELECT * FROM users WHERE uid='boss'")
@@ -299,6 +307,114 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
+def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
+    items_html = ""
+    for idx, item in enumerate(items):
+        qty_val = float(item.get('qty', 0))
+        qty_str = f"{qty_val:g}"
+        qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
+        
+        items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item.get('hsn','')}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['rate']):.3f}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['amount']):.2f}</td></tr>"
+    
+    tax_rows = ""
+    if tax_type == "IGST":
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
+    else:
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
+
+    return f"""
+    <div class="page-container">
+        <div class="top-label">{copy_title}</div>
+        <div class="container">
+            <div class="header">
+                <div class="header-left" style="color:black;"><strong>GSTIN :</strong> {comp['gstin']}<br><strong>State :</strong> {comp['state']} &nbsp; <strong>Code :</strong> {comp['state_code']}</div>
+                <div class="header-right" style="color:black;"><strong>M. No. :</strong> {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}</div>
+                <h2 style="margin: 0; font-size: 16px; text-decoration: underline; color:black;">PURCHASE ORDER</h2>
+                <h1 style="color: #1a4f8b; font-size: 32px; font-weight: 900; margin: 10px 0 5px 0;">{comp['name']}</h1>
+                <p style="font-weight: bold; margin: 2px 0; color:black;">{comp['tagline']}</p>
+                <p style="margin: 2px 0; color:black;">{comp['address']}</p>
+                <p style="margin: 2px 0; font-weight: bold; color:black;">{comp['contact']}</p>
+                <p style="margin: 5px 0 0 0; font-weight: bold; font-style: italic; color: #1a4f8b;">{comp['manufacturing']}</p>
+            </div>
+            <table class="info-table" style="color:black;">
+                <tr>
+                    <td style="width: 50%; border: 1px solid #000;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">TO (VENDOR) :</div>
+                        <strong>{fd.get('vendor_name','')}</strong><br>
+                        {fd.get('vendor_address','').replace(chr(10), '<br>')}<br><br>
+                        <strong>GSTIN:</strong> {fd.get('vendor_gstin','')}<br>
+                        <strong>State:</strong> {fd.get('vendor_state','')} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code:</strong> {fd.get('vendor_state_code','')}
+                    </td>
+                    <td style="width: 50%; border: 1px solid #000; vertical-align: top;">
+                        <table style="border:none; width:100%; color:black;">
+                            <tr><td style="border:none; padding:4px;"><strong>P. O. No.</strong></td><td style="border:none; padding:4px;">: <strong>{fd.get('po_no','')}</strong></td></tr>
+                            <tr><td style="border:none; padding:4px;"><strong>P. O. Date</strong></td><td style="border:none; padding:4px;">: {fd.get('po_date','')}</td></tr>
+                            <tr><td style="border:none; padding:4px;"><strong>Delivery Date</strong></td><td style="border:none; padding:4px;">: {fd.get('delivery_date','')}</td></tr>
+                            <tr><td style="border:none; padding:4px;"><strong>Payment Terms</strong></td><td style="border:none; padding:4px;">: {fd.get('payment_terms','')}</td></tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+            <table class="info-table" style="border-top: none; color:black;">
+                <tr>
+                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">BILL TO :</td>
+                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">SHIP TO :</td>
+                </tr>
+                <tr>
+                    <td style="vertical-align: top; border: 1px solid #000;">
+                        <strong>{comp['name']}</strong><br>
+                        {comp['address']}<br><br>
+                        <strong>GSTIN :</strong> {comp['gstin']}<br>
+                        <strong>State :</strong> {comp['state']} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code :</strong> {comp['state_code']}
+                    </td>
+                    <td style="vertical-align: top; border: 1px solid #000;">
+                        <strong>{comp['name']}</strong><br>
+                        {comp['address']}<br><br>
+                        <strong>GSTIN :</strong> {comp['gstin']}<br>
+                        <strong>State :</strong> {comp['state']} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code :</strong> {comp['state_code']}
+                    </td>
+                </tr>
+            </table>
+            <table class="items-table" style="color:black;">
+                <tr>
+                    <th style="width:5%; border: 1px solid #000;">Sr.<br>No.</th><th style="width:40%; border: 1px solid #000;">Product Description</th><th style="width:10%; border: 1px solid #000;">HSN<br>Code</th><th style="width:15%; border: 1px solid #000;">Total Qty.</th><th style="width:15%; border: 1px solid #000;">Rate</th><th style="width:15%; border: 1px solid #000;">Taxable Amount</th>
+                </tr>
+                {items_html}
+                <tr class="spacer-row"><td style="border: 1px solid #000; border-bottom: none; border-top:none; height: 180px;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td></tr>
+            </table>
+            <table style="border-top: 2px solid #000; width: 100%; border-collapse: collapse; color:black;">
+                <tr>
+                    <td rowspan="5" style="width:60%; padding: 10px; border: 1px solid #000; vertical-align: top;">
+                        <strong>Total Order Amount in Words :</strong><br><span style="font-style: italic; font-size: 13px;">{amt_words}</span>
+                    </td>
+                    <td style="width:25%; text-align:right; font-weight:bold; padding: 4px; border: 1px solid #000;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border: 1px solid #000;">{total_before:.2f}</td>
+                </tr>
+                {tax_rows}
+                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">{total_tax:.2f}</td></tr>
+                <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">{total_after:.2f}</td></tr>
+            </table>
+            <div style="border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 10px; font-size: 10px; color: black;">
+                <ul style="margin: 0; padding-left: 15px;">
+                    <li>It is mandatory to mention P.O numbers in all your Invoices/Challans.</li>
+                    <li>Kindly confirm receipt of order and confirm the delivery by E-Mail.</li>
+                    <li>All Rejections including in process and field returns to be replaced by you free of cost on immediate basis with all expenses to your account.</li>
+                    <li>Warranty requirement: 12 months from receipt date against any manufacturing defect and functional failure.</li>
+                </ul>
+            </div>
+            <div class="footer" style="color:black; height: 60px; position: relative;">
+                <div style="position: absolute; left: 10px; bottom: 5px; font-weight: bold;">(Prepared By)</div>
+                <div style="position: absolute; left: 45%; bottom: 5px; font-weight: bold;">(HOD)</div>
+                <div style="position: absolute; right: 10px; bottom: 5px; font-weight: bold;">(Approved By)</div>
+                <div style="position: absolute; right: 10px; top: 5px;"><strong>For {comp['name'].upper()}</strong></div>
+            </div>
+        </div>
+    </div>
+    <div style="margin-top: 4px; width: 100%; color: black; line-height: 1.2; text-align: center;">
+        <div style="font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Purchase Order **</div>
+        <div style="font-size: 10px;">All disputes are subject to G. B. Nagar Jurisdiction only.</div>
+    </div>
+    """
+
 # ==========================================
 # 4. APP SYSTEM & SCREENS
 # ==========================================
@@ -356,6 +472,7 @@ else:
                     execute_data("TRUNCATE TABLE item_master", ())
                     execute_data("TRUNCATE TABLE tax_invoices", ())
                     execute_data("TRUNCATE TABLE challans", ())
+                    execute_data("TRUNCATE TABLE purchase_orders", ())
                     execute_data("TRUNCATE TABLE company_profiles", ())
                     execute_data("DELETE FROM users WHERE uid != 'boss'", ()) 
                     st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
@@ -399,6 +516,7 @@ else:
                             execute_data("DELETE FROM item_master WHERE uid=%s", (t_uid,))
                             execute_data("DELETE FROM tax_invoices WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM challans WHERE created_by=%s", (t_name,))
+                            execute_data("DELETE FROM purchase_orders WHERE created_by=%s", (t_name,))
                             
                             st.success(f"✅ Client '{t_name}' and their entire dataset has been wiped!")
                             time.sleep(1.5)
@@ -411,11 +529,11 @@ else:
             st.info("No active clients available to delete.")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Partner Dashboard")
-            st.write("Manage your registered vendors and clients here. Generate specific Invoices or Challans with a single click.")
+            st.write("Manage your registered vendors and clients here. Generate specific Invoices, Challans, or POs with a single click.")
             st.markdown("---")
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
@@ -429,15 +547,20 @@ else:
                         st.markdown(f"#### 🏢 {p['party_name']}")
                         st.caption(f"**State:** {p['state']} | **GST:** {p['gstin']}")
                         
-                        c_inv, c_chal = st.columns(2)
-                        if c_inv.button("📄 Invoice", key=f"d_inv_{p['id']}", use_container_width=True):
+                        c_inv, c_chal, c_po = st.columns(3)
+                        if c_inv.button("📄 Inv", key=f"d_inv_{p['id']}", use_container_width=True):
                             st.session_state['sel_inv_p'] = p['party_name']
                             st.session_state.redirect_menu = "📄 Tax Invoice"
                             st.rerun()
                             
-                        if c_chal.button("📝 Challan", key=f"d_chal_{p['id']}", use_container_width=True):
+                        if c_chal.button("📝 Chal", key=f"d_chal_{p['id']}", use_container_width=True):
                             st.session_state['sel_chal_p'] = p['party_name']
                             st.session_state.redirect_menu = "📝 Delivery Challan"
+                            st.rerun()
+
+                        if c_po.button("🛒 PO", key=f"d_po_{p['id']}", use_container_width=True):
+                            st.session_state['sel_po_p'] = p['party_name']
+                            st.session_state.redirect_menu = "🛒 Purchase Order"
                             st.rerun()
                             
                         if st.button("🗑️ Remove Partner", key=f"d_del_{p['id']}", use_container_width=True):
@@ -574,7 +697,7 @@ else:
 
         elif menu == "📜 Analytics History":
             st.title("📜 Document Ledger & Analytics")
-            view_type = st.radio("Select View Category:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            view_type = st.radio("Select View Category:", ["Delivery Challans", "Tax Invoices", "Purchase Orders"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
@@ -616,7 +739,7 @@ else:
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📝 Delivery Challan"}); st.rerun()
                         if c5_del.button("🗑️", key=f"dc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("No active logs found for these parameters.")
-            else:
+            elif view_type == "Tax Invoices":
                 party_list = fetch_data("SELECT DISTINCT bill_to_name FROM tax_invoices WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Partners"] + [p['bill_to_name'] for p in party_list]
                 sel_history_p = st.selectbox("🔍 Filter Data by Partner", p_names, key="hist_inv")
@@ -656,10 +779,50 @@ else:
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📄 Tax Invoice"}); st.rerun()
                         if c5_del.button("🗑️", key=f"di_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("No active logs found for these parameters.")
+            else:
+                party_list = fetch_data("SELECT DISTINCT vendor_name FROM purchase_orders WHERE created_by = %s AND is_deleted = 0", (safe_name,))
+                p_names = ["All Vendors"] + [p['vendor_name'] for p in party_list]
+                sel_history_p = st.selectbox("🔍 Filter Data by Vendor", p_names, key="hist_po")
+
+                if sel_history_p == "All Vendors":
+                    data = fetch_data("SELECT id, po_date, po_no, vendor_name, amount FROM purchase_orders WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
+                else:
+                    data = fetch_data("SELECT id, po_date, po_no, vendor_name, amount FROM purchase_orders WHERE created_by = %s AND vendor_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
+                
+                if data:
+                    df = pd.DataFrame(data)
+                    df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
+                    df['date_obj'] = pd.to_datetime(df['po_date'], format='%d/%m/%Y', errors='coerce')
+                    
+                    st.markdown(f"### 📈 Node Analytics: {sel_history_p}")
+                    c1, c2 = st.columns(2)
+                    c1.metric("🧾 Total POs Issued", f"{len(df)}")
+                    c2.metric("💰 Cumulative Value", f"₹ {df['clean_amt'].sum():,.2f}")
+                    
+                    valid_dates = df.dropna(subset=['date_obj']).copy()
+                    if not valid_dates.empty:
+                        valid_dates['month_str'] = valid_dates['date_obj'].dt.strftime('%b %Y')
+                        valid_dates['sort_key'] = valid_dates['date_obj'].dt.strftime('%Y-%m')
+                        grouped = valid_dates.groupby(['sort_key', 'month_str'])['clean_amt'].sum().reset_index().sort_values('sort_key')
+                        chart_data = grouped.set_index('month_str')['clean_amt']
+                        st.bar_chart(chart_data)
+                        
+                    st.markdown("---")
+                    st.write("**Recent Document Ledger:**")
+
+                    h1, h2, h3, h4, h5 = st.columns([1.5, 1.5, 3, 2, 2]); h1.write("**PO Date**"); h2.write("**PO No**"); h3.write("**Vendor Name**"); h4.write("**Value**"); h5.write("**Actions**")
+                    for c in data[:50]:
+                        c1, c2, c3, c4, c5_edit, c5_del = st.columns([1.5, 1.5, 3, 2, 1, 1])
+                        c1.write(c['po_date']); c2.write(c['po_no']); c3.write(c['vendor_name']); c4.write(c['amount'])
+                        if c5_edit.button("✏️", key=f"epo_{c['id']}"):
+                            fd = fetch_data("SELECT * FROM purchase_orders WHERE id=%s", (c['id'],))[0]
+                            st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "🛒 Purchase Order"}); st.rerun()
+                        if c5_del.button("🗑️", key=f"dpo_{c['id']}"): execute_data("UPDATE purchase_orders SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("No active logs found for these parameters.")
 
         elif menu == "🗑️ Recycle Bin":
             st.title("🗑️ Security Archive")
-            view_type = st.radio("Select Archive View:", ["Delivery Challans", "Tax Invoices"], horizontal=True)
+            view_type = st.radio("Select Archive View:", ["Delivery Challans", "Tax Invoices", "Purchase Orders"], horizontal=True)
             
             if view_type == "Delivery Challans":
                 data = fetch_data("SELECT id, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
@@ -674,7 +837,7 @@ else:
                         if c4.button("🔄 Restore", key=f"rc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
                         if c5.button("❌ Annihilate", key=f"dc_perm_{c['id']}"): execute_data("DELETE FROM challans WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("Challan archive is completely secure and empty.")
-            else:
+            elif view_type == "Tax Invoices":
                 data = fetch_data("SELECT id, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
                     if st.button("🚨 Flush Entire Data Sector", type="primary"):
@@ -687,6 +850,187 @@ else:
                         if c4.button("🔄 Restore", key=f"ri_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
                         if c5.button("❌ Annihilate", key=f"di_perm_{c['id']}"): execute_data("DELETE FROM tax_invoices WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("Invoice archive is completely secure and empty.")
+            else:
+                data = fetch_data("SELECT id, po_no, vendor_name, amount FROM purchase_orders WHERE created_by = %s AND is_deleted = 1", (safe_name,))
+                if data:
+                    if st.button("🚨 Flush Entire Data Sector", type="primary"):
+                        execute_data("DELETE FROM purchase_orders WHERE created_by = %s AND is_deleted = 1", (safe_name,))
+                        st.rerun()
+                    st.markdown("---")
+                    for c in data:
+                        c1, c2, c3, c4, c5 = st.columns([2,3,2,1.5,1.5])
+                        c1.write(c['po_no']); c2.write(c['vendor_name']); c3.write(c['amount'])
+                        if c4.button("🔄 Restore", key=f"rpo_{c['id']}"): execute_data("UPDATE purchase_orders SET is_deleted = 0, deleted_at = NULL WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5.button("❌ Annihilate", key=f"dpo_perm_{c['id']}"): execute_data("DELETE FROM purchase_orders WHERE id = %s", (c['id'],)); st.rerun()
+                else: st.info("PO archive is completely secure and empty.")
+
+        # ==========================================
+        # PURCHASE ORDER ENGINE
+        # ==========================================
+        elif menu == "🛒 Purchase Order":
+            st.title("🛒 Purchase Order Generator")
+            parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
+            
+            if st.button("🔄 Clear Document Matrix", key="c_po_btn"):
+                preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
+                for k in list(st.session_state.keys()):
+                    if k not in preserve: st.session_state.pop(k, None)
+                st.session_state.item_count = 1; st.rerun()
+
+            fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
+            if 'item_count' not in st.session_state: st.session_state.item_count = 1
+            if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
+
+            def_po_no = fd.get('po_no', get_next_auto_no('purchase_orders', 'po_no', safe_name)) if mode == "INSERT" else fd.get('po_no','')
+            
+            dash_party = st.session_state.pop('sel_po_p', None)
+            party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
+            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
+
+            if 'v_name' not in st.session_state:
+                st.session_state.v_name = fd.get('vendor_name', '')
+                st.session_state.v_add = fd.get('vendor_address', '')
+                st.session_state.v_gst = fd.get('vendor_gstin', '')
+                st.session_state.v_state = fd.get('vendor_state', '')
+                st.session_state.v_scode = fd.get('vendor_state_code', '')
+
+            with st.expander("📌 PO Logistics Parameters", expanded=True):
+                c1, c2, c3, c4 = st.columns(4)
+                po_no = c1.text_input("P.O. No. *", value=def_po_no)
+                po_date = c2.date_input("P.O. Date *", parse_date(fd.get('po_date')))
+                delivery_date = c3.text_input("Delivery Date / Timeline *", fd.get('delivery_date',''))
+                payment_terms = c4.text_input("Payment Terms *", fd.get('payment_terms','30 Days'))
+
+            with st.expander("🏢 Vendor Information (TO)", expanded=True):
+                st.markdown("**Select Vendor (Who is supplying the goods):**")
+                
+                unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
+                p_names_list = ["-- Select Business Partner --"] + unique_parties
+                
+                sel_company = st.selectbox("1. Select Vendor Company", p_names_list, key="sel_company_po")
+                
+                if sel_company != "-- Select Business Partner --":
+                    company_records = [p for p in parties_db if p['party_name'] == sel_company]
+                    address_options = [p['address'] for p in company_records]
+                    sel_address = st.selectbox("2. Select Branch Address", address_options, key="sel_address_po")
+                    
+                    pm = next((p for p in company_records if p['address'] == sel_address), None)
+                    if pm:
+                        st.session_state.v_name = pm['party_name']
+                        st.session_state.v_add = pm['address']
+                        st.session_state.v_gst = pm['gstin']
+                        st.session_state.v_state = pm['state']
+                        st.session_state.v_scode = pm['state_code']
+                else:
+                    for k in ['v_name', 'v_add', 'v_gst', 'v_state', 'v_scode']: st.session_state[k] = ""
+                    
+                v_name = st.text_input("Vendor Name *", key="v_name")
+                v_add = st.text_area("Registered Address *", key="v_add", height=68)
+                v_gst = st.text_input("GSTIN Reference *", key="v_gst")
+                c_st1, c_st2 = st.columns(2)
+                with c_st1: v_state = st.text_input("State Region *", key="v_state")
+                with c_st2: v_scode = st.text_input("Regional Code *", key="v_scode")
+
+            st.subheader("📦 Order Line Items")
+            items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, v_name)) if v_name else []
+            item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
+            
+            col_btn1, col_btn2, _ = st.columns([2, 2, 8])
+            if col_btn1.button("➕ Insert Blank Row", key="add_po_item"): st.session_state.item_count += 1; st.rerun()
+            if col_btn2.button("➖ Remove Bottom Row", key="rem_po_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
+
+            def autofill_po_item(index, db):
+                sel = st.session_state[f"sel_it_po_widget_{index}"]
+                if sel != "-- Manual Configuration --":
+                    im = next((it for it in db if it['item_description'] == sel), None)
+                    if im:
+                        st.session_state[f"po_desc_{index}"] = im['item_description']
+                        st.session_state[f"po_hsn_{index}"] = im['hsn_code']
+                        st.session_state[f"po_rate_{index}"] = float(im.get('rate', 0.0))
+
+            items_data = []
+            for i in range(st.session_state.item_count):
+                ex = fi[i] if i < len(fi) else {}
+                st.markdown(f"**Item Sequence {i+1}**")
+                
+                if f"po_desc_{i}" not in st.session_state:
+                    st.session_state[f"po_desc_{i}"] = ex.get('desc', '')
+                    st.session_state[f"po_hsn_{i}"] = ex.get('hsn', '')
+                    st.session_state[f"po_qty_{i}"] = float(ex.get('qty', 0.0))
+                    st.session_state[f"po_unit_{i}"] = ex.get('unit', 'Pcs')
+                    st.session_state[f"po_rate_{i}"] = float(ex.get('rate', 0.0))
+
+                sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_po_widget_{i}", on_change=autofill_po_item, args=(i, items_db))
+                
+                c1, c2, c4, c_unit, c5 = st.columns([3.5, 1.5, 1.5, 1.5, 2])
+                with c1: desc = st.text_input("Material Description *", key=f"po_desc_{i}")
+                with c2: hsn = st.text_input("HSN Code *", key=f"po_hsn_{i}")
+                with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"po_qty_{i}")
+                with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"po_unit_{i}")
+                with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"po_rate_{i}")
+                
+                amount = round(qty * rate, 2)
+                items_data.append({"desc": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
+                st.markdown("---")
+
+            tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True, key="po_tax")
+            tax_mode = "IGST" if "IGST" in tax_type else "CGST"
+
+            if 'pdf_po' in st.session_state:
+                st.success("✅ Purchase Order Successfully Generated.")
+                c_dl, c_wa = st.columns([2, 2])
+                c_dl.download_button("📄 Export PO Document", data=st.session_state['pdf_po'], file_name=f"PurchaseOrder_{st.session_state['po_no_disp']}.pdf", mime="application/pdf", type="primary")
+                
+                wa_msg = f"Hello {st.session_state.get('v_name', 'Vendor')},%0A%0APlease find attached our Purchase Order from *{my_company['name']}*:%0A*PO No:* {st.session_state['po_no_disp']}%0A*Total Amount:* {st.session_state.get('po_amt', '')}%0A%0AKindly process the order at the earliest."
+                wa_link = f"https://wa.me/?text={wa_msg}"
+                c_wa.link_button("📲 Forward via WhatsApp", wa_link)
+            else:
+                if st.session_state.get('trigger_save_po', False):
+                    total_before = round(sum(item['amount'] for item in items_data), 2)
+                    cgst = round(total_before * 0.09, 2) if tax_mode == "CGST" else 0.0
+                    sgst = round(total_before * 0.09, 2) if tax_mode == "CGST" else 0.0
+                    igst = round(total_before * 0.18, 2) if tax_mode == "IGST" else 0.0
+                    total_tax = round(cgst + sgst + igst, 2)
+                    total_after = round(total_before + total_tax, 2)
+                    
+                    amt_words = get_indian_currency_words(total_after)
+                    items_json = json.dumps(items_data)
+
+                    current_fd = {
+                        'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'), 'delivery_date': delivery_date, 'payment_terms': payment_terms,
+                        'vendor_name': v_name, 'vendor_address': v_add, 'vendor_gstin': v_gst, 'vendor_state': v_state, 'vendor_state_code': v_scode
+                    }
+
+                    if mode == "INSERT": execute_data("""INSERT INTO purchase_orders (created_by, po_date, po_no, vendor_name, vendor_address, vendor_gstin, vendor_state, vendor_state_code, delivery_date, payment_terms, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, delivery_date, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode))
+                    else: execute_data("""UPDATE purchase_orders SET po_date=%s, po_no=%s, vendor_name=%s, vendor_address=%s, vendor_gstin=%s, vendor_state=%s, vendor_state_code=%s, delivery_date=%s, payment_terms=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, delivery_date, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
+
+                    base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 180px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
+                    po_html_content = generate_po_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Purchase Order")
+
+                    full_po_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{po_html_content}</body></html>"
+                    
+                    st.session_state['pdf_po'] = HTML(string=full_po_html).write_pdf()
+                    st.session_state['po_no_disp'] = po_no
+                    st.session_state['po_amt'] = f"₹{total_after:.2f}"
+                    
+                    st.session_state.trigger_save_po = False
+                    st.rerun()
+
+                if st.button("🚀 Finalize & Compile PO", type="primary"):
+                    req_fields = {
+                        "P.O. No.": po_no, "Delivery Date": delivery_date, "Payment Terms": payment_terms,
+                        "Vendor Name": v_name, "Vendor Address": v_add, "Vendor GSTIN": v_gst, "Vendor State": v_state, "Vendor State Code": v_scode
+                    }
+                    missing = [k for k, v in req_fields.items() if not str(v).strip()]
+                    
+                    invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
+                    if invalid_items:
+                        missing.append(f"Incomplete Material Sequence (Description, HSN, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
+
+                    if missing:
+                        display_validation_error(missing)
+                    else:
+                        confirm_save_dialog("Purchase Order", "trigger_save_po")
 
         # ==========================================
         # TAX INVOICE ENGINE
@@ -708,7 +1052,10 @@ else:
             def_inv_no = fd.get('invoice_no', get_next_auto_no('tax_invoices', 'invoice_no', safe_name)) if mode == "INSERT" else fd.get('invoice_no','')
             def_date_time = get_ist_time()
 
-            # Restore b1 if it was previously set, else load from form_data
+            dash_party = st.session_state.pop('sel_inv_p', None)
+            party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
+            default_idx = party_names.index(dash_party) if dash_party in party_names else 0
+
             if 'b1' not in st.session_state:
                 st.session_state.b1 = fd.get('bill_to_name', '')
                 st.session_state.b2 = fd.get('bill_to_address', '')
@@ -742,7 +1089,6 @@ else:
                 with col_b:
                     st.markdown("**Bill-To Entity:**")
                     
-                    # --- NAYA 2-STEP DROPDOWN LOGIC ---
                     unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
                     p_names_list = ["-- Select Business Partner --"] + unique_parties
                     
@@ -763,7 +1109,6 @@ else:
                             st.session_state.pos_inv = pm.get('place_of_supply', '')
                     else:
                         for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
-                    # ----------------------------------
                         
                     b_name = st.text_input("Partner Name *", key="b1")
                     b_add = st.text_area("Registered Address *", key="b2", height=68)
@@ -798,7 +1143,6 @@ else:
                     s_scode = st.text_input("Regional Code * ", key="s5", disabled=same_as)
 
             st.subheader("📦 Line Items")
-            # Items loaded using the raw text input value to ensure custom names match mapping if applicable
             items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, b_name)) if b_name else []
             item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
             
@@ -950,7 +1294,6 @@ else:
             with col1:
                 st.markdown("**Dispatch Logistics Details:**")
                 
-                # --- NAYA 2-STEP DROPDOWN LOGIC ---
                 unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
                 p_names_list = ["-- Select Business Partner --"] + unique_parties
                 
@@ -971,7 +1314,6 @@ else:
                         st.session_state.pos_chal = pm.get('place_of_supply', '')
                 else:
                     for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
-                # ----------------------------------
                         
                 party_name = st.text_input("Dispatch To Name *", key="p_name")
                 party_address = st.text_area("Registered Address *", key="p_add")
@@ -992,7 +1334,6 @@ else:
                 date_of_supply = st.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
 
             st.subheader("📦 Line Items")
-            # Items loaded using the raw text input value
             items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, party_name)) if party_name else []
             item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
 
