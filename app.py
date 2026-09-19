@@ -307,111 +307,125 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
+# 🔴 THIS IS THE BRAND NEW PO HTML FORMAT MATCHING YOUR PDF PERFECTLY 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
     for idx, item in enumerate(items):
         qty_val = float(item.get('qty', 0))
         qty_str = f"{qty_val:g}"
-        qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
         
-        items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item.get('hsn','')}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['rate']):.3f}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['amount']):.2f}</td></tr>"
+        items_html += f"<tr><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{idx+1}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:left;'>{item['desc'].replace(chr(10), '<br>')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('hsn','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{fd.get('delivery_date','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{qty_str}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('unit', 'NOS')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['rate']):.4f}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['amount']):.2f}</td></tr>"
     
-    tax_rows = ""
     if tax_type == "IGST":
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
+        tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>IGST @18.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{igst:.2f}</td></tr>"
     else:
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
+        tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>CGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{cgst:.2f}</td></tr><tr><td style='border-bottom: 1px solid #000; padding: 4px;'>SGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{sgst:.2f}</td></tr>"
 
     return f"""
-    <div class="page-container">
-        <div class="top-label">{copy_title}</div>
-        <div class="container">
-            <div class="header">
-                <div class="header-left" style="color:black;"><strong>GSTIN :</strong> {comp['gstin']}<br><strong>State :</strong> {comp['state']} &nbsp; <strong>Code :</strong> {comp['state_code']}</div>
-                <div class="header-right" style="color:black;"><strong>M. No. :</strong> {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}</div>
-                <h2 style="margin: 0; font-size: 16px; text-decoration: underline; color:black;">PURCHASE ORDER</h2>
-                <h1 style="color: #1a4f8b; font-size: 32px; font-weight: 900; margin: 10px 0 5px 0;">{comp['name']}</h1>
-                <p style="font-weight: bold; margin: 2px 0; color:black;">{comp['tagline']}</p>
-                <p style="margin: 2px 0; color:black;">{comp['address']}</p>
-                <p style="margin: 2px 0; font-weight: bold; color:black;">{comp['contact']}</p>
-                <p style="margin: 5px 0 0 0; font-weight: bold; font-style: italic; color: #1a4f8b;">{comp['manufacturing']}</p>
-            </div>
-            <table class="info-table" style="color:black;">
-                <tr>
-                    <td style="width: 50%; border: 1px solid #000;">
-                        <div style="font-weight: bold; margin-bottom: 5px;">TO (VENDOR) :</div>
-                        <strong>{fd.get('vendor_name','')}</strong><br>
-                        {fd.get('vendor_address','').replace(chr(10), '<br>')}<br><br>
-                        <strong>GSTIN:</strong> {fd.get('vendor_gstin','')}<br>
-                        <strong>State:</strong> {fd.get('vendor_state','')} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code:</strong> {fd.get('vendor_state_code','')}
-                    </td>
-                    <td style="width: 50%; border: 1px solid #000; vertical-align: top;">
-                        <table style="border:none; width:100%; color:black;">
-                            <tr><td style="border:none; padding:4px;"><strong>P. O. No.</strong></td><td style="border:none; padding:4px;">: <strong>{fd.get('po_no','')}</strong></td></tr>
-                            <tr><td style="border:none; padding:4px;"><strong>P. O. Date</strong></td><td style="border:none; padding:4px;">: {fd.get('po_date','')}</td></tr>
-                            <tr><td style="border:none; padding:4px;"><strong>Delivery Date</strong></td><td style="border:none; padding:4px;">: {fd.get('delivery_date','')}</td></tr>
-                            <tr><td style="border:none; padding:4px;"><strong>Payment Terms</strong></td><td style="border:none; padding:4px;">: {fd.get('payment_terms','')}</td></tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-            <table class="info-table" style="border-top: none; color:black;">
-                <tr>
-                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">BILL TO :</td>
-                    <td style="width: 50%; text-align: center; background-color: #f0f0f0; font-weight: bold; border: 1px solid #000;">SHIP TO :</td>
-                </tr>
-                <tr>
-                    <td style="vertical-align: top; border: 1px solid #000;">
-                        <strong>{comp['name']}</strong><br>
-                        {comp['address']}<br><br>
-                        <strong>GSTIN :</strong> {comp['gstin']}<br>
-                        <strong>State :</strong> {comp['state']} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code :</strong> {comp['state_code']}
-                    </td>
-                    <td style="vertical-align: top; border: 1px solid #000;">
-                        <strong>{comp['name']}</strong><br>
-                        {comp['address']}<br><br>
-                        <strong>GSTIN :</strong> {comp['gstin']}<br>
-                        <strong>State :</strong> {comp['state']} &nbsp;&nbsp;&nbsp;&nbsp; <strong>State Code :</strong> {comp['state_code']}
-                    </td>
-                </tr>
-            </table>
-            <table class="items-table" style="color:black;">
-                <tr>
-                    <th style="width:5%; border: 1px solid #000;">Sr.<br>No.</th><th style="width:40%; border: 1px solid #000;">Product Description</th><th style="width:10%; border: 1px solid #000;">HSN<br>Code</th><th style="width:15%; border: 1px solid #000;">Total Qty.</th><th style="width:15%; border: 1px solid #000;">Rate</th><th style="width:15%; border: 1px solid #000;">Taxable Amount</th>
-                </tr>
-                {items_html}
-                <tr class="spacer-row"><td style="border: 1px solid #000; border-bottom: none; border-top:none; height: 180px;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td><td style="border: 1px solid #000; border-bottom: none; border-top:none;"></td></tr>
-            </table>
-            <table style="border-top: 2px solid #000; width: 100%; border-collapse: collapse; color:black;">
-                <tr>
-                    <td rowspan="5" style="width:60%; padding: 10px; border: 1px solid #000; vertical-align: top;">
-                        <strong>Total Order Amount in Words :</strong><br><span style="font-style: italic; font-size: 13px;">{amt_words}</span>
-                    </td>
-                    <td style="width:25%; text-align:right; font-weight:bold; padding: 4px; border: 1px solid #000;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border: 1px solid #000;">{total_before:.2f}</td>
-                </tr>
-                {tax_rows}
-                <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8; border: 1px solid #000;">{total_tax:.2f}</td></tr>
-                <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">{total_after:.2f}</td></tr>
-            </table>
-            <div style="border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 10px; font-size: 10px; color: black;">
-                <ul style="margin: 0; padding-left: 15px;">
-                    <li>It is mandatory to mention P.O numbers in all your Invoices/Challans.</li>
-                    <li>Kindly confirm receipt of order and confirm the delivery by E-Mail.</li>
-                    <li>All Rejections including in process and field returns to be replaced by you free of cost on immediate basis with all expenses to your account.</li>
-                    <li>Warranty requirement: 12 months from receipt date against any manufacturing defect and functional failure.</li>
-                </ul>
-            </div>
-            <div class="footer" style="color:black; height: 60px; position: relative;">
-                <div style="position: absolute; left: 10px; bottom: 5px; font-weight: bold;">(Prepared By)</div>
-                <div style="position: absolute; left: 45%; bottom: 5px; font-weight: bold;">(HOD)</div>
-                <div style="position: absolute; right: 10px; bottom: 5px; font-weight: bold;">(Approved By)</div>
-                <div style="position: absolute; right: 10px; top: 5px;"><strong>For {comp['name'].upper()}</strong></div>
+    <div style="font-family: Arial, sans-serif; font-size: 11px; color: #000;">
+        <div style="text-align:center; font-weight:bold; font-size: 16px; margin-bottom:10px; text-decoration: underline;">PURCHASE ORDER</div>
+        <table style="width: 100%; border: none; font-size: 11px; margin-bottom: 10px;">
+            <tr>
+                <td style="width: 50%; border: none; vertical-align: top;">
+                    <strong style="font-size: 14px;">{comp['name'].upper()}</strong><br>
+                    {comp['address']}<br>
+                    Phone: {comp['contact'].split('Mob.:')[-1].split('|')[0].strip() if 'Mob.:' in comp['contact'] else '9711325563'}<br>
+                    E-Mail: rainbowindustries647@gmail.com<br>
+                    GSTIN: {comp['gstin']}<br>
+                    GST Type: Regular<br><br>
+                    <strong>M/S {fd.get('vendor_name', '').upper()}</strong><br>
+                    {fd.get('vendor_address', '').replace(chr(10), '<br>')}<br>
+                    GSTIN: {fd.get('vendor_gstin', '')}
+                </td>
+                <td style="width: 50%; border: none; vertical-align: top;">
+                    <div style="text-align: right; font-weight: bold; font-size: 14px; margin-bottom: 10px; color: #1a4f8b;">RAINBOW INDUSTRIES</div>
+                    <table style="width: 100%; border: 1px solid #000; border-collapse: collapse; font-size: 11px;">
+                        <tr><td style="border: 1px solid #000; padding: 4px;">Purchase Order No</td><td style="border: 1px solid #000; padding: 4px;">: <strong>{fd.get('po_no')}</strong></td></tr>
+                        <tr><td style="border: 1px solid #000; padding: 4px;">Type</td><td style="border: 1px solid #000; padding: 4px;">: Regular</td></tr>
+                        <tr><td style="border: 1px solid #000; padding: 4px;">Dated</td><td style="border: 1px solid #000; padding: 4px;">: {fd.get('po_date')}</td></tr>
+                        <tr><td style="border: 1px solid #000; padding: 4px;">Your Ref. No.</td><td style="border: 1px solid #000; padding: 4px;">: </td></tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000; text-align: center;">
+            <tr style="background-color: #f0f0f0;">
+                <th style="border: 1px solid #000; padding: 4px;">S.No.</th>
+                <th style="border: 1px solid #000; padding: 4px;">Item Code</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 25%;">Item Description</th>
+                <th style="border: 1px solid #000; padding: 4px;">Hsn Code</th>
+                <th style="border: 1px solid #000; padding: 4px;">Delivery<br>Date</th>
+                <th style="border: 1px solid #000; padding: 4px;">Rev No</th>
+                <th style="border: 1px solid #000; padding: 4px;">GL Acct</th>
+                <th style="border: 1px solid #000; padding: 4px;">Your<br>Part No.</th>
+                <th style="border: 1px solid #000; padding: 4px;">Quantity</th>
+                <th style="border: 1px solid #000; padding: 4px;">Unit</th>
+                <th style="border: 1px solid #000; padding: 4px;">Rate in<br>INR</th>
+                <th style="border: 1px solid #000; padding: 4px;">Amt in<br>INR</th>
+            </tr>
+            {items_html}
+            <tr><td colspan="12" style="border-left: 1px solid #000; border-right: 1px solid #000; height: 120px;"></td></tr>
+        </table>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px; border: 1px solid #000; border-top: none;">
+            <tr>
+                <td style="width: 60%; border-right: 1px solid #000; padding: 5px; vertical-align: top;">
+                    <table style="width: 100%; border: none;">
+                        <tr><td style="border: none; width: 30%;">P & F Charges.</td><td style="border: none;">: On Your Account</td></tr>
+                        <tr><td style="border: none;">Freight Charges</td><td style="border: none;">: On Your Account</td></tr>
+                        <tr><td style="border: none;">Insurance Charge</td><td style="border: none;">: On Your Account</td></tr>
+                        <tr><td style="border: none;">Payment</td><td style="border: none;">: {fd.get('payment_terms', '30 Days')}</td></tr>
+                        <tr><td style="border: none;">Dispatch</td><td style="border: none;">: </td></tr>
+                        <tr><td style="border: none;">Remarks</td><td style="border: none;">: </td></tr>
+                    </table>
+                </td>
+                <td style="width: 40%; padding: 0; vertical-align: top;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr><td style="border-bottom: 1px solid #000; padding: 4px;">Total Before Discount</td><td style="border-bottom: 1px solid #000; padding: 4px; text-align: right;">INR {total_before:.2f}</td></tr>
+                        {tax_rows}
+                        <tr><td style="font-weight: bold; padding: 4px;">Grand Total</td><td style="font-weight: bold; padding: 4px; text-align: right;">INR {total_after:.2f}</td></tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000; border-top: none;">
+            <tr>
+                <td style="width: 50%; border-right: 1px solid #000; padding: 5px; vertical-align: top;">
+                    <strong>BILL TO:</strong><br>
+                    <strong>{comp['name'].upper()}</strong><br>
+                    {comp['address']}<br>
+                    GSTIN: {comp['gstin']}
+                </td>
+                <td style="width: 50%; padding: 5px; vertical-align: top;">
+                    <strong>SHIP TO:</strong><br>
+                    <strong>{comp['name'].upper()}</strong><br>
+                    {comp['address']}<br>
+                    GSTIN: {comp['gstin']}
+                </td>
+            </tr>
+        </table>
+        
+        <div style="border: 1px solid #000; border-top: none; padding: 5px; font-size: 10px; line-height: 1.4;">
+            # It is mandatory to mention P.O numbers in all your Invoices/Challans.<br>
+            # Kindly confirm receipt of order and confirm the delivery by E-Mail.<br>
+            # All Rejections including in process and field returns to be replaced by you free of cost on immediate basis with all expenses to your account<br>
+            # Warranty requirement: 12 months from receipt date against date against any manufacturing defect and functional failure.
+        </div>
+        
+        <div style="border: 1px solid #000; border-top: none; padding: 5px; height: 60px; position: relative;">
+            <div style="position: absolute; right: 10px; top: 5px; font-size: 10px;"><strong>For {comp['name'].upper()}</strong></div>
+            <div style="position: absolute; left: 10px; bottom: 5px; font-size: 10px; width: 100%;">
+                <table style="width: 100%; text-align: center; border: none;">
+                    <tr>
+                        <td style="border: none; text-align: left; padding-left: 20px;"><strong>(Prepared By)</strong></td>
+                        <td style="border: none;"><strong>(HOD)</strong></td>
+                        <td style="border: none; text-align: right; padding-right: 20px;"><strong>(Approved By)</strong></td>
+                    </tr>
+                </table>
             </div>
         </div>
-    </div>
-    <div style="margin-top: 4px; width: 100%; color: black; line-height: 1.2; text-align: center;">
-        <div style="font-size: 10px; font-style: italic; font-weight: bold;">** This is a Computer Generated Purchase Order **</div>
-        <div style="font-size: 10px;">All disputes are subject to G. B. Nagar Jurisdiction only.</div>
     </div>
     """
 
