@@ -307,6 +307,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
+# 🔴 DYNAMIC PO HTML (ITEM CODE & HSN Optional) 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     
     has_item_code = any(str(item.get('item_code', '')).strip() for item in items)
@@ -961,10 +962,16 @@ else:
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
 
-            # 🔴 AUTO INCREMENT PO NUMBER (e.g. RI-01, RI-02) 🔴
+            # 🔴 AUTO INCREMENT PO NUMBER (e.g. RI/2026-27/101) 🔴
             auto_po = get_next_auto_no('purchase_orders', 'po_no', safe_name)
-            if auto_po == "1":
-                auto_po = "RI-01"
+            
+            # If it's a completely new system ("1") or an old format like "RI-02"
+            if auto_po == "1" or auto_po.startswith("RI-"):
+                now = datetime.datetime.now()
+                yr = now.year
+                fy = f"{yr-1}-{str(yr)[-2:]}" if now.month < 4 else f"{yr}-{str(yr+1)[-2:]}"
+                auto_po = f"RI/{fy}/101"
+                
             def_po_no = fd.get('po_no', auto_po) if mode == "INSERT" else fd.get('po_no','')
             
             dash_party = st.session_state.pop('sel_po_p', None)
@@ -982,6 +989,7 @@ else:
                 c1, c2, c3, c4 = st.columns(4)
                 po_no = c1.text_input("P.O. No. *", value=def_po_no)
                 po_date = c2.date_input("P.O. Date *", parse_date(fd.get('po_date')))
+                # CALENDAR WIDGET FOR DELIVERY DATE
                 delivery_date = c3.date_input("Delivery Date *", parse_date(fd.get('delivery_date')))
                 payment_terms = c4.text_input("Payment Terms *", fd.get('payment_terms','30 Days'))
 
@@ -1065,7 +1073,7 @@ else:
             if 'pdf_po' in st.session_state:
                 st.success("✅ Purchase Order Successfully Generated.")
                 c_dl, c_wa = st.columns([2, 2])
-                c_dl.download_button("📄 Export PO Document", data=st.session_state['pdf_po'], file_name=f"PurchaseOrder_{st.session_state['po_no_disp']}.pdf", mime="application/pdf", type="primary")
+                c_dl.download_button("📄 Export PO Document", data=st.session_state['pdf_po'], file_name=f"PurchaseOrder_{st.session_state['po_no_disp'].replace('/','_')}.pdf", mime="application/pdf", type="primary")
                 
                 wa_msg = f"Hello {st.session_state.get('v_name', 'Vendor')},%0A%0APlease find attached our Purchase Order from *{my_company['name']}*:%0A*PO No:* {st.session_state['po_no_disp']}%0A*Total Amount:* {st.session_state.get('po_amt', '')}%0A%0AKindly process the order at the earliest."
                 wa_link = f"https://wa.me/?text={wa_msg}"
