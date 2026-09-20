@@ -307,13 +307,54 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
+# 🔴 DYNAMIC PO HTML (ITEM CODE & HSN Optional) 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
+    
+    # Check if ANY item has an Item Code or HSN
+    has_item_code = any(str(item.get('item_code', '')).strip() for item in items)
+    has_hsn = any(str(item.get('hsn', '')).strip() for item in items)
+    
+    headers_html = """<th style="border: 1px solid #000; padding: 4px;">S.No.</th>"""
+    if has_item_code:
+        headers_html += """<th style="border: 1px solid #000; padding: 4px;">Item Code</th>"""
+    headers_html += """<th style="border: 1px solid #000; padding: 4px; width: 35%;">Item Description</th>"""
+    if has_hsn:
+        headers_html += """<th style="border: 1px solid #000; padding: 4px;">Hsn Code</th>"""
+        
+    headers_html += """
+        <th style="border: 1px solid #000; padding: 4px;">Delivery<br>Date</th>
+        <th style="border: 1px solid #000; padding: 4px;">Quantity</th>
+        <th style="border: 1px solid #000; padding: 4px;">Unit</th>
+        <th style="border: 1px solid #000; padding: 4px;">Rate in<br>INR</th>
+        <th style="border: 1px solid #000; padding: 4px;">Amt in<br>INR</th>
+    """
+
     items_html = ""
     for idx, item in enumerate(items):
         qty_val = float(item.get('qty', 0))
         qty_str = f"{qty_val:g}"
         
-        items_html += f"<tr><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{idx+1}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:left;'>{item['desc'].replace(chr(10), '<br>')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('hsn','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{fd.get('delivery_date','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{qty_str}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('unit', 'NOS')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['rate']):.4f}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['amount']):.2f}</td></tr>"
+        row = f"<tr><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{idx+1}</td>"
+        
+        if has_item_code:
+            row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('item_code', '')}</td>"
+            
+        row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:left;'>{item.get('desc', '').replace(chr(10), '<br>')}</td>"
+        
+        if has_hsn:
+            row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('hsn','')}</td>"
+            
+        row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{fd.get('delivery_date','')}</td>"
+        row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{qty_str}</td>"
+        row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('unit', 'NOS')}</td>"
+        row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item.get('rate', 0)):.4f}</td>"
+        row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item.get('amount', 0)):.2f}</td></tr>"
+        
+        items_html += row
+        
+    colspan = 7
+    if has_item_code: colspan += 1
+    if has_hsn: colspan += 1
     
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>IGST @18.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{igst:.2f}</td></tr>"
@@ -337,7 +378,6 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                     GSTIN: {fd.get('vendor_gstin', '')}
                 </td>
                 <td style="width: 50%; border: none; vertical-align: top; text-align: right;">
-                    <!-- NAYA CREATIVE RI LOGO YAHAN HAI -->
                     <div style="text-align: right; margin-bottom: 10px;">
                         <div style="display: inline-block; background-color: #1a4f8b; padding: 8px 16px; border: 2px solid #000; border-radius: 8px; font-family: Georgia, serif; font-size: 28px; font-weight: bold;">
                             <span style="color: #f1c40f;">R</span><span style="color: #ffffff;">I</span>
@@ -355,18 +395,10 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
         
         <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000; text-align: center;">
             <tr style="background-color: #f0f0f0;">
-                <th style="border: 1px solid #000; padding: 4px;">S.No.</th>
-                <th style="border: 1px solid #000; padding: 4px;">Item Code</th>
-                <th style="border: 1px solid #000; padding: 4px; width: 35%;">Item Description</th>
-                <th style="border: 1px solid #000; padding: 4px;">Hsn Code</th>
-                <th style="border: 1px solid #000; padding: 4px;">Delivery<br>Date</th>
-                <th style="border: 1px solid #000; padding: 4px;">Quantity</th>
-                <th style="border: 1px solid #000; padding: 4px;">Unit</th>
-                <th style="border: 1px solid #000; padding: 4px;">Rate in<br>INR</th>
-                <th style="border: 1px solid #000; padding: 4px;">Amt in<br>INR</th>
+                {headers_html}
             </tr>
             {items_html}
-            <tr><td colspan="9" style="border-left: 1px solid #000; border-right: 1px solid #000; height: 120px;"></td></tr>
+            <tr><td colspan="{colspan}" style="border-left: 1px solid #000; border-right: 1px solid #000; height: 120px;"></td></tr>
         </table>
         
         <table style="width: 100%; border-collapse: collapse; font-size: 11px; border: 1px solid #000; border-top: none;">
@@ -605,7 +637,6 @@ else:
             
             c1, c2 = st.columns(2)
             with c1:
-                # LAEBLS UPDATED FOR PO VENDORS
                 st.subheader("👥 Register Customer / Vendor")
                 with st.form("p_m", clear_on_submit=True):
                     pn = st.text_input("Partner Name *")
@@ -621,7 +652,6 @@ else:
                         else: st.error("Please complete all mandatory fields marked with (*).")
 
             with c2:
-                # LAEBLS UPDATED FOR PO VENDORS
                 st.subheader("📦 Map Materials / PO Items")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
@@ -973,6 +1003,7 @@ else:
                 st.markdown(f"**Item Sequence {i+1}**")
                 
                 if f"po_desc_{i}" not in st.session_state:
+                    st.session_state[f"po_code_{i}"] = ex.get('item_code', '')
                     st.session_state[f"po_desc_{i}"] = ex.get('desc', '')
                     st.session_state[f"po_hsn_{i}"] = ex.get('hsn', '')
                     st.session_state[f"po_qty_{i}"] = float(ex.get('qty', 0.0))
@@ -981,15 +1012,16 @@ else:
 
                 sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_po_widget_{i}", on_change=autofill_po_item, args=(i, items_db))
                 
-                c1, c2, c4, c_unit, c5 = st.columns([3.5, 1.5, 1.5, 1.5, 2])
+                c_code, c1, c2, c4, c_unit, c5 = st.columns([1.5, 3.0, 1.5, 1.0, 1.0, 1.5])
+                with c_code: item_code = st.text_input("Item Code (Opt)", key=f"po_code_{i}")
                 with c1: desc = st.text_input("Material Description *", key=f"po_desc_{i}")
-                with c2: hsn = st.text_input("HSN Code *", key=f"po_hsn_{i}")
-                with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"po_qty_{i}")
-                with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"po_unit_{i}")
-                with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"po_rate_{i}")
+                with c2: hsn = st.text_input("HSN Code (Opt)", key=f"po_hsn_{i}")
+                with c4: qty = st.number_input("Qty *", min_value=0.0, format="%.3f", key=f"po_qty_{i}")
+                with c_unit: unit = st.selectbox("Unit", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"po_unit_{i}")
+                with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, format="%.3f", key=f"po_rate_{i}")
                 
                 amount = round(qty * rate, 2)
-                items_data.append({"desc": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
+                items_data.append({"item_code": item_code, "desc": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
 
             tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True, key="po_tax")
@@ -1044,9 +1076,10 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
+                    # HSN is now optional for PO, so we don't check it here.
+                    invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
-                        missing.append(f"Incomplete Material Sequence (Description, HSN, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
+                        missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
 
                     if missing:
                         display_validation_error(missing)
