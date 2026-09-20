@@ -310,7 +310,6 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
 # 🔴 DYNAMIC PO HTML (ITEM CODE & HSN Optional) 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     
-    # Check if ANY item has an Item Code or HSN
     has_item_code = any(str(item.get('item_code', '')).strip() for item in items)
     has_hsn = any(str(item.get('hsn', '')).strip() for item in items)
     
@@ -928,8 +927,11 @@ else:
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
 
-            # RANDOM PO NUMBER GENERATOR (e.g. RI-A8F2B)
-            def_po_no = fd.get('po_no', f"RI-{uuid.uuid4().hex[:6].upper()}") if mode == "INSERT" else fd.get('po_no','')
+            # 🔴 AUTO INCREMENT PO NUMBER (e.g. RI-01, RI-02) 🔴
+            auto_po = get_next_auto_no('purchase_orders', 'po_no', safe_name)
+            if auto_po == "1":
+                auto_po = "RI-01"
+            def_po_no = fd.get('po_no', auto_po) if mode == "INSERT" else fd.get('po_no','')
             
             dash_party = st.session_state.pop('sel_po_p', None)
             party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
@@ -1305,7 +1307,7 @@ else:
                         "Ship To Name": s_name, "Ship To Address": s_add, 
                         "Ship To GSTIN": s_gst, "Ship To State": s_state, "Ship To State Code": s_scode
                     }
-                    missing = [k for k, v in req_fields.items() if not str(v).strip()]
+                    missing = [k for k, v in req_fields.items() if not str(v).items() if not str(v).strip()]
                     
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
