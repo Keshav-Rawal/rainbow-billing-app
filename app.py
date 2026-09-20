@@ -307,7 +307,6 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
-# 🔴 DYNAMIC PO HTML (ITEM CODE & HSN Optional) 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     
     has_item_code = any(str(item.get('item_code', '')).strip() for item in items)
@@ -636,19 +635,54 @@ else:
             
             c1, c2 = st.columns(2)
             with c1:
-                st.subheader("👥 Register Customer / Vendor")
-                with st.form("p_m", clear_on_submit=True):
-                    pn = st.text_input("Partner Name *")
-                    pa = st.text_area("Address *")
-                    pg = st.text_input("GSTIN *")
-                    ps = st.text_input("State *")
-                    pc = st.text_input("State Code *")
-                    ppos = st.text_input("Place of Supply (City/State) *")
-                    if st.form_submit_button("Save Partner"):
-                        if pn and pa and pg and ps and pc:
-                            execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
-                            st.success(f"Partner '{pn}' securely registered.")
-                        else: st.error("Please complete all mandatory fields marked with (*).")
+                st.subheader("👥 Manage Customers / Vendors")
+                tab_add, tab_edit = st.tabs(["➕ Register New", "✏️ Edit Existing"])
+                
+                with tab_add:
+                    with st.form("p_m", clear_on_submit=True):
+                        pn = st.text_input("Partner Name *")
+                        pa = st.text_area("Address *")
+                        pg = st.text_input("GSTIN *")
+                        ps = st.text_input("State *")
+                        pc = st.text_input("State Code *")
+                        ppos = st.text_input("Place of Supply (City/State) *")
+                        if st.form_submit_button("Save Partner"):
+                            if pn and pa and pg and ps and pc:
+                                execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply) VALUES (%s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos))
+                                st.success(f"Partner '{pn}' securely registered.")
+                                time.sleep(1)
+                                st.rerun()
+                            else: st.error("Please complete all mandatory fields marked with (*).")
+                            
+                with tab_edit:
+                    saved_parties_full = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
+                    if not saved_parties_full:
+                        st.info("No partners registered yet.")
+                    else:
+                        party_names = {p['party_name']: p for p in saved_parties_full}
+                        sel_edit_p = st.selectbox("Select Partner to Edit", list(party_names.keys()))
+                        sel_p_data = party_names[sel_edit_p]
+                        
+                        with st.form("p_edit_m"):
+                            epn = st.text_input("Partner Name *", value=sel_p_data['party_name'])
+                            epa = st.text_area("Address *", value=sel_p_data['address'])
+                            epg = st.text_input("GSTIN *", value=sel_p_data['gstin'])
+                            eps = st.text_input("State *", value=sel_p_data['state'])
+                            epc = st.text_input("State Code *", value=sel_p_data['state_code'])
+                            eppos = st.text_input("Place of Supply (City/State) *", value=sel_p_data.get('place_of_supply', ''))
+                            
+                            if st.form_submit_button("💾 Update Partner Details"):
+                                if epn and epa and epg and eps and epc:
+                                    old_name = sel_p_data['party_name']
+                                    pid = sel_p_data['id']
+                                    execute_data("UPDATE party_master SET party_name=%s, address=%s, gstin=%s, state=%s, state_code=%s, place_of_supply=%s WHERE id=%s", (epn, epa, epg, eps, epc, eppos, pid))
+                                    if epn != old_name:
+                                        execute_data("UPDATE item_master SET party_name=%s WHERE party_name=%s AND uid=%s", (epn, old_name, uid))
+                                    st.success(f"Partner details updated successfully!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Please complete all mandatory fields.")
 
             with c2:
                 st.subheader("📦 Map Materials / PO Items")
@@ -948,7 +982,6 @@ else:
                 c1, c2, c3, c4 = st.columns(4)
                 po_no = c1.text_input("P.O. No. *", value=def_po_no)
                 po_date = c2.date_input("P.O. Date *", parse_date(fd.get('po_date')))
-                # CALENDAR WIDGET FOR DELIVERY DATE
                 delivery_date = c3.date_input("Delivery Date *", parse_date(fd.get('delivery_date')))
                 payment_terms = c4.text_input("Payment Terms *", fd.get('payment_terms','30 Days'))
 
@@ -1078,7 +1111,6 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    # HSN is now optional for PO, so we don't check it here.
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
@@ -1307,7 +1339,7 @@ else:
                         "Ship To Name": s_name, "Ship To Address": s_add, 
                         "Ship To GSTIN": s_gst, "Ship To State": s_state, "Ship To State Code": s_scode
                     }
-                    missing = [k for k, v in req_fields.items() if not str(v).items() if not str(v).strip()]
+                    missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
