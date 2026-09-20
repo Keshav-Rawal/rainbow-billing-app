@@ -307,14 +307,13 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
-# 🔴 THIS IS THE BRAND NEW PO HTML FORMAT MATCHING YOUR PDF PERFECTLY 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
     for idx, item in enumerate(items):
         qty_val = float(item.get('qty', 0))
         qty_str = f"{qty_val:g}"
         
-        items_html += f"<tr><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{idx+1}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:left;'>{item['desc'].replace(chr(10), '<br>')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('hsn','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{fd.get('delivery_date','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{qty_str}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('unit', 'NOS')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['rate']):.4f}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['amount']):.2f}</td></tr>"
+        items_html += f"<tr><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{idx+1}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'></td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:left;'>{item['desc'].replace(chr(10), '<br>')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('hsn','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{fd.get('delivery_date','')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{qty_str}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('unit', 'NOS')}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['rate']):.4f}</td><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item['amount']):.2f}</td></tr>"
     
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>IGST @18.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{igst:.2f}</td></tr>"
@@ -337,9 +336,14 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                     {fd.get('vendor_address', '').replace(chr(10), '<br>')}<br>
                     GSTIN: {fd.get('vendor_gstin', '')}
                 </td>
-                <td style="width: 50%; border: none; vertical-align: top;">
-                    <div style="text-align: right; font-weight: bold; font-size: 14px; margin-bottom: 10px; color: #1a4f8b;">RAINBOW INDUSTRIES</div>
-                    <table style="width: 100%; border: 1px solid #000; border-collapse: collapse; font-size: 11px;">
+                <td style="width: 50%; border: none; vertical-align: top; text-align: right;">
+                    <!-- NAYA CREATIVE RI LOGO YAHAN HAI -->
+                    <div style="text-align: right; margin-bottom: 10px;">
+                        <div style="display: inline-block; background-color: #1a4f8b; padding: 8px 16px; border: 2px solid #000; border-radius: 8px; font-family: Georgia, serif; font-size: 28px; font-weight: bold;">
+                            <span style="color: #f1c40f;">R</span><span style="color: #ffffff;">I</span>
+                        </div>
+                    </div>
+                    <table style="width: 100%; border: 1px solid #000; border-collapse: collapse; font-size: 11px; text-align: left;">
                         <tr><td style="border: 1px solid #000; padding: 4px;">Purchase Order No</td><td style="border: 1px solid #000; padding: 4px;">: <strong>{fd.get('po_no')}</strong></td></tr>
                         <tr><td style="border: 1px solid #000; padding: 4px;">Type</td><td style="border: 1px solid #000; padding: 4px;">: Regular</td></tr>
                         <tr><td style="border: 1px solid #000; padding: 4px;">Dated</td><td style="border: 1px solid #000; padding: 4px;">: {fd.get('po_date')}</td></tr>
@@ -353,19 +357,16 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
             <tr style="background-color: #f0f0f0;">
                 <th style="border: 1px solid #000; padding: 4px;">S.No.</th>
                 <th style="border: 1px solid #000; padding: 4px;">Item Code</th>
-                <th style="border: 1px solid #000; padding: 4px; width: 25%;">Item Description</th>
+                <th style="border: 1px solid #000; padding: 4px; width: 35%;">Item Description</th>
                 <th style="border: 1px solid #000; padding: 4px;">Hsn Code</th>
                 <th style="border: 1px solid #000; padding: 4px;">Delivery<br>Date</th>
-                <th style="border: 1px solid #000; padding: 4px;">Rev No</th>
-                <th style="border: 1px solid #000; padding: 4px;">GL Acct</th>
-                <th style="border: 1px solid #000; padding: 4px;">Your<br>Part No.</th>
                 <th style="border: 1px solid #000; padding: 4px;">Quantity</th>
                 <th style="border: 1px solid #000; padding: 4px;">Unit</th>
                 <th style="border: 1px solid #000; padding: 4px;">Rate in<br>INR</th>
                 <th style="border: 1px solid #000; padding: 4px;">Amt in<br>INR</th>
             </tr>
             {items_html}
-            <tr><td colspan="12" style="border-left: 1px solid #000; border-right: 1px solid #000; height: 120px;"></td></tr>
+            <tr><td colspan="9" style="border-left: 1px solid #000; border-right: 1px solid #000; height: 120px;"></td></tr>
         </table>
         
         <table style="width: 100%; border-collapse: collapse; font-size: 11px; border: 1px solid #000; border-top: none;">
@@ -604,7 +605,8 @@ else:
             
             c1, c2 = st.columns(2)
             with c1:
-                st.subheader("👥 Register New Partner")
+                # LAEBLS UPDATED FOR PO VENDORS
+                st.subheader("👥 Register Customer / Vendor")
                 with st.form("p_m", clear_on_submit=True):
                     pn = st.text_input("Partner Name *")
                     pa = st.text_area("Address *")
@@ -619,7 +621,8 @@ else:
                         else: st.error("Please complete all mandatory fields marked with (*).")
 
             with c2:
-                st.subheader("📦 Map Partner Materials")
+                # LAEBLS UPDATED FOR PO VENDORS
+                st.subheader("📦 Map Materials / PO Items")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
                 
                 if not saved_parties:
@@ -895,7 +898,8 @@ else:
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
 
-            def_po_no = fd.get('po_no', get_next_auto_no('purchase_orders', 'po_no', safe_name)) if mode == "INSERT" else fd.get('po_no','')
+            # RANDOM PO NUMBER GENERATOR (e.g. RI-A8F2B)
+            def_po_no = fd.get('po_no', f"RI-{uuid.uuid4().hex[:6].upper()}") if mode == "INSERT" else fd.get('po_no','')
             
             dash_party = st.session_state.pop('sel_po_p', None)
             party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
@@ -912,7 +916,8 @@ else:
                 c1, c2, c3, c4 = st.columns(4)
                 po_no = c1.text_input("P.O. No. *", value=def_po_no)
                 po_date = c2.date_input("P.O. Date *", parse_date(fd.get('po_date')))
-                delivery_date = c3.text_input("Delivery Date / Timeline *", fd.get('delivery_date',''))
+                # CALENDAR WIDGET FOR DELIVERY DATE
+                delivery_date = c3.date_input("Delivery Date *", parse_date(fd.get('delivery_date')))
                 payment_terms = c4.text_input("Payment Terms *", fd.get('payment_terms','30 Days'))
 
             with st.expander("🏢 Vendor Information (TO)", expanded=True):
@@ -1009,14 +1014,16 @@ else:
                     
                     amt_words = get_indian_currency_words(total_after)
                     items_json = json.dumps(items_data)
+                    
+                    del_date_str = delivery_date.strftime('%d/%m/%Y')
 
                     current_fd = {
-                        'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'), 'delivery_date': delivery_date, 'payment_terms': payment_terms,
+                        'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y'), 'delivery_date': del_date_str, 'payment_terms': payment_terms,
                         'vendor_name': v_name, 'vendor_address': v_add, 'vendor_gstin': v_gst, 'vendor_state': v_state, 'vendor_state_code': v_scode
                     }
 
-                    if mode == "INSERT": execute_data("""INSERT INTO purchase_orders (created_by, po_date, po_no, vendor_name, vendor_address, vendor_gstin, vendor_state, vendor_state_code, delivery_date, payment_terms, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, delivery_date, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode))
-                    else: execute_data("""UPDATE purchase_orders SET po_date=%s, po_no=%s, vendor_name=%s, vendor_address=%s, vendor_gstin=%s, vendor_state=%s, vendor_state_code=%s, delivery_date=%s, payment_terms=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, delivery_date, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
+                    if mode == "INSERT": execute_data("""INSERT INTO purchase_orders (created_by, po_date, po_no, vendor_name, vendor_address, vendor_gstin, vendor_state, vendor_state_code, delivery_date, payment_terms, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, del_date_str, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode))
+                    else: execute_data("""UPDATE purchase_orders SET po_date=%s, po_no=%s, vendor_name=%s, vendor_address=%s, vendor_gstin=%s, vendor_state=%s, vendor_state_code=%s, delivery_date=%s, payment_terms=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, del_date_str, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 180px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     po_html_content = generate_po_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Purchase Order")
@@ -1032,7 +1039,7 @@ else:
 
                 if st.button("🚀 Finalize & Compile PO", type="primary"):
                     req_fields = {
-                        "P.O. No.": po_no, "Delivery Date": delivery_date, "Payment Terms": payment_terms,
+                        "P.O. No.": po_no, "Payment Terms": payment_terms,
                         "Vendor Name": v_name, "Vendor Address": v_add, "Vendor GSTIN": v_gst, "Vendor State": v_state, "Vendor State Code": v_scode
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
