@@ -11,6 +11,7 @@ import uuid
 import re
 import tempfile
 import os
+import base64
 
 # AI Library Load Check
 try:
@@ -20,6 +21,27 @@ except ImportError:
     HAS_AI = False
 
 st.set_page_config(page_title="Rainbow ERP - Enterprise", layout="wide")
+
+# ==========================================
+# AUTO-SIGNATURE LOADER (BASE64)
+# ==========================================
+def get_signature_img():
+    possible_paths = ["image_37ad75.png", "signature.png"]
+    for p in possible_paths:
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+                return f'<br><img src="data:image/png;base64,{b64}" style="height: 40px; object-fit: contain; margin: 2px 0;" /><br>'
+    return '<br><br><br><br>'
+
+def get_signature_img_po():
+    possible_paths = ["image_37ad75.png", "signature.png"]
+    for p in possible_paths:
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+                return f'<img src="data:image/png;base64,{b64}" style="height: 35px; object-fit: contain; margin-bottom: -5px; margin-top: -15px;" /><br>'
+    return '<br><br>'
 
 # ==========================================
 # 0. POP-UP DIALOG CONFIGURATION (REVIEW SYSTEM)
@@ -296,7 +318,12 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                 <tr><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">Total Amount After Tax</td><td style="text-align:right; font-weight:bold; background-color:#d5d8d8; border: 1px solid #000;">{total_after:.2f}</td></tr>
             </table>
             <div class="footer" style="color:black;">
-                <div style="float: right; width: 40%; text-align: center;"><span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br><strong>For RAINBOW INDUSTRIES</strong><br><br><br><br><span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span></div>
+                <div style="float: right; width: 40%; text-align: center;">
+                    <span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br>
+                    <strong>For RAINBOW INDUSTRIES</strong>
+                    {get_signature_img()}
+                    <span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span>
+                </div>
                 <div style="clear: both;"></div>
             </div>
         </div>
@@ -307,7 +334,6 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
-# 🔴 DYNAMIC PO HTML (ITEM CODE & HSN Optional) 🔴
 def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     
     has_item_code = any(str(item.get('item_code', '')).strip() for item in items)
@@ -453,7 +479,10 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                     <tr>
                         <td style="border: none; text-align: left; padding-left: 20px;"><strong>(Prepared By)</strong></td>
                         <td style="border: none;"><strong>(HOD)</strong></td>
-                        <td style="border: none; text-align: right; padding-right: 20px;"><strong>(Approved By)</strong></td>
+                        <td style="border: none; text-align: right; padding-right: 20px;">
+                            {get_signature_img_po()}
+                            <strong>(Approved By)</strong>
+                        </td>
                     </tr>
                 </table>
             </div>
@@ -1119,6 +1148,7 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
+                    # HSN is now optional for PO, so we don't check it here.
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
@@ -1553,7 +1583,11 @@ else:
                             </table>
                             <div class="footer">
                                 <p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p>
-                                <div class="signature"><p>For <strong>{my_company['name'].upper()}</strong></p><br><br><p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p></div>
+                                <div class="signature">
+                                    <p>For <strong>{my_company['name'].upper()}</strong></p>
+                                    <div style="text-align:center;">{get_signature_img()}</div>
+                                    <p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p>
+                                </div>
                             </div>
                         </div>
                         <div style="margin-top: 4px; width: 100%; color: #1c2d42; line-height: 1.2; text-align: center;">
