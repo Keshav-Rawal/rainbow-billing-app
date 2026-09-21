@@ -108,6 +108,23 @@ def init_db():
                 )
             """)
             
+            # NAYA PAYABLES (VENDOR BILLS) TABLE
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS purchase_invoices (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    created_by VARCHAR(100),
+                    vendor_name VARCHAR(100),
+                    invoice_no VARCHAR(50),
+                    invoice_date DATE,
+                    po_ref VARCHAR(50),
+                    amount FLOAT,
+                    due_date DATE,
+                    status VARCHAR(20) DEFAULT 'PENDING',
+                    paid_date DATE NULL,
+                    is_deleted INT DEFAULT 0
+                )
+            """)
+            
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
@@ -549,6 +566,7 @@ else:
                     execute_data("TRUNCATE TABLE challans", ())
                     execute_data("TRUNCATE TABLE purchase_orders", ())
                     execute_data("TRUNCATE TABLE company_profiles", ())
+                    execute_data("TRUNCATE TABLE purchase_invoices", ())
                     execute_data("DELETE FROM users WHERE uid != 'boss'", ()) 
                     st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
                     time.sleep(2)
@@ -592,6 +610,7 @@ else:
                             execute_data("DELETE FROM tax_invoices WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM challans WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM purchase_orders WHERE created_by=%s", (t_name,))
+                            execute_data("DELETE FROM purchase_invoices WHERE created_by=%s", (t_name,))
                             
                             st.success(f"✅ Client '{t_name}' and their entire dataset has been wiped!")
                             time.sleep(1.5)
@@ -604,7 +623,7 @@ else:
             st.info("No active clients available to delete.")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "💳 Vendor Payments", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Partner Dashboard")
@@ -644,6 +663,82 @@ else:
                             st.rerun()
                         
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+
+        elif menu == "💳 Vendor Payments":
+            st.title("💳 Accounts Payable (Khata Tracker)")
+            st.write("Track your incoming vendor bills and **45-days payment cycles** automatically.")
+            
+            tab_add, tab_pending, tab_paid = st.tabs(["➕ Add Purchase Bill", "⏳ Pending Payments", "✅ Paid History"])
+            
+            parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
+            party_names = [p['party_name'] for p in parties_db]
+            
+            with tab_add:
+                st.markdown("### Enter New Vendor Invoice")
+                with st.form("add_pur_inv", clear_on_submit=True):
+                    c1, c2 = st.columns(2)
+                    v_name = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names)
+                    inv_no = c2.text_input("Vendor Bill / Invoice No. *")
+                    
+                    c3, c4, c5 = st.columns(3)
+                    inv_date = c3.date_input("Bill Date *", datetime.date.today())
+                    po_ref = c4.text_input("Against P.O. No. (Optional)")
+                    amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0)
+                    
+                    if st.form_submit_button("💾 Save Bill & Track 45-Days"):
+                        if v_name != "-- Select Vendor --" and inv_no and amt > 0:
+                            due_d = inv_date + datetime.timedelta(days=45)
+                            execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_ref, amt, due_d.strftime('%Y-%m-%d')))
+                            st.success(f"✅ Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')}")
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.error("⚠️ Please select a Vendor and fill Bill No. and Amount.")
+                            
+            with tab_pending:
+                pending_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PENDING' AND is_deleted=0 ORDER BY due_date ASC", (safe_name,))
+                if pending_data:
+                    st.markdown("### 🚨 Outstanding Vendor Dues")
+                    for p in pending_data:
+                        due_obj = p['due_date'] if isinstance(p['due_date'], datetime.date) else datetime.datetime.strptime(p['due_date'], '%Y-%m-%d').date()
+                        inv_obj = p['invoice_date'] if isinstance(p['invoice_date'], datetime.date) else datetime.datetime.strptime(p['invoice_date'], '%Y-%m-%d').date()
+                        days_left = (due_obj - datetime.date.today()).days
+                        
+                        box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
+                        status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
+                        
+                        st.markdown(f"""
+                        <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h4 style="margin:0; color:#1a4f8b;">{p['vendor_name']}</h4>
+                                    <p style="margin:2px 0; font-size:14px;"><strong>Bill No:</strong> {p['invoice_no']} | <strong>Bill Date:</strong> {inv_obj.strftime('%d %b %Y')} | <strong>PO Ref:</strong> {p['po_ref']}</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <h3 style="margin:0; color:#d32f2f;">₹ {p['amount']:,.2f}</h3>
+                                    <p style="margin:2px 0; font-weight:bold; font-size:12px; color: {'red' if days_left < 0 else 'orange' if days_left <=7 else 'green'};">{status_text} (Due: {due_obj.strftime('%d %b %Y')})</p>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}"):
+                            execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
+                            st.rerun()
+                else:
+                    st.info("No pending payments! You are all clear. 🎉")
+                    
+            with tab_paid:
+                paid_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PAID' AND is_deleted=0 ORDER BY paid_date DESC LIMIT 50", (safe_name,))
+                if paid_data:
+                    st.markdown("### ✅ Recently Cleared Invoices")
+                    df = pd.DataFrame(paid_data)
+                    df['invoice_date'] = pd.to_datetime(df['invoice_date']).dt.strftime('%d %b %Y')
+                    df['paid_date'] = pd.to_datetime(df['paid_date']).dt.strftime('%d %b %Y')
+                    df = df[['vendor_name', 'invoice_no', 'amount', 'invoice_date', 'paid_date', 'po_ref']]
+                    df.rename(columns={'vendor_name':'Vendor', 'invoice_no':'Bill No', 'amount':'Amount (₹)', 'invoice_date':'Bill Date', 'paid_date':'Paid On', 'po_ref':'PO Ref'}, inplace=True)
+                    st.dataframe(df, use_container_width=True)
+                else:
+                    st.info("No paid history found.")
 
         elif menu == "⚙️ Company Profile":
             st.title("⚙️ Global Profile Configuration")
@@ -1018,7 +1113,6 @@ else:
                 c1, c2, c3, c4 = st.columns(4)
                 po_no = c1.text_input("P.O. No. *", value=def_po_no)
                 po_date = c2.date_input("P.O. Date *", parse_date(fd.get('po_date')))
-                # CALENDAR WIDGET FOR DELIVERY DATE
                 delivery_date = c3.date_input("Delivery Date *", parse_date(fd.get('delivery_date')))
                 payment_terms = c4.text_input("Payment Terms *", fd.get('payment_terms','30 Days'))
 
@@ -1148,7 +1242,6 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    # HSN is now optional for PO, so we don't check it here.
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
