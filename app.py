@@ -746,15 +746,18 @@ else:
                                 v_n = sel_chal_str.split(" | Challan: ")[0]
                                 c_n = sel_chal_str.split(" | Challan: ")[1]
                                 
-                                chal_rec = fetch_data("SELECT po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
+                                chal_rec = fetch_data("SELECT challan_date, po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
                                 po_val = chal_rec[0]['po_ref'] if chal_rec else ""
-
-                                due_d = inv_date + datetime.timedelta(days=credit_days)
+                                
+                                # 🔴 MSME LOGIC: Calculate due date from CHALLAN DATE, not Bill Date
+                                ch_date_obj = chal_rec[0]['challan_date'] if isinstance(chal_rec[0]['challan_date'], datetime.date) else datetime.datetime.strptime(str(chal_rec[0]['challan_date']), '%Y-%m-%d').date()
+                                due_d = ch_date_obj + datetime.timedelta(days=credit_days)
+                                
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_n, inv_no, inv_date.strftime('%Y-%m-%d'), f"PO: {po_val} | Chal: {c_n}", amt, due_d.strftime('%Y-%m-%d')))
                                 execute_data("UPDATE inward_challans SET status='BILLED' WHERE vendor_name=%s AND challan_no=%s AND created_by=%s", (v_n, c_n, safe_name))
 
-                                st.success(f"✅ Challan Linked & Billed! Due date: {due_d.strftime('%d %b %Y')}")
-                                time.sleep(1.5)
+                                st.success(f"✅ Billed! Due date ({due_d.strftime('%d %b %Y')}) calculated strictly from material arrival date ({ch_date_obj.strftime('%d %b')}).")
+                                time.sleep(2.5)
                                 st.rerun()
                             else:
                                 st.error("⚠️ Please select a Challan, enter Invoice No and Amount.")
