@@ -116,6 +116,7 @@ def init_db():
                     challan_no VARCHAR(50),
                     challan_date DATE,
                     po_ref VARCHAR(50),
+                    amount FLOAT DEFAULT 0.0,
                     status VARCHAR(20) DEFAULT 'UNBILLED',
                     is_deleted INT DEFAULT 0
                 )
@@ -149,6 +150,8 @@ def init_db():
             try: cursor.execute("ALTER TABLE tax_invoices ADD COLUMN eway_bill_no VARCHAR(50)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE challans ADD COLUMN eway_bill_no VARCHAR(50)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE inward_challans ADD COLUMN amount FLOAT DEFAULT 0.0"); conn.commit()
             except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
@@ -702,7 +705,7 @@ else:
                     with st.expander("👀 View Pending (Unbilled) Vendor Challans", expanded=False):
                         for pc in pend_chal:
                             col_c1, col_c2 = st.columns([4, 1])
-                            col_c1.info(f"**Vendor:** {pc['vendor_name']} | **Challan:** {pc['challan_no']} | **Date:** {pc['challan_date']} | **PO Ref:** {pc['po_ref']}")
+                            col_c1.info(f"**Vendor:** {pc['vendor_name']} | **Challan:** {pc['challan_no']} | **Date:** {pc['challan_date']} | **PO Ref:** {pc['po_ref']} | **Value:** ₹{pc.get('amount', 0.0):.2f}")
                             if col_c2.button("🗑️ Delete", key=f"del_ic_{pc['id']}", use_container_width=True):
                                 execute_data("UPDATE inward_challans SET is_deleted=1 WHERE id=%s", (pc['id'],))
                                 st.rerun()
@@ -711,14 +714,15 @@ else:
                     c1, c2 = st.columns(2)
                     v_name_c = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names, key="v_chal")
                     chal_no = c2.text_input("Vendor Challan No. *")
-                    c3, c4 = st.columns(2)
+                    c3, c4, c5 = st.columns([2, 2, 2])
                     chal_date = c3.date_input("Challan Date *", datetime.date.today())
                     po_ref_c = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list, key="po_chal")
+                    chal_amt = c5.number_input("Challan Value (₹) (Optional)", min_value=0.0, step=100.0)
 
                     if st.form_submit_button("💾 Save Inward Challan (GRN)"):
                         if v_name_c != "-- Select Vendor --" and chal_no:
                             po_val_c = "" if po_ref_c == "-- Direct Bill (No PO) --" else po_ref_c
-                            execute_data("INSERT INTO inward_challans (created_by, vendor_name, challan_no, challan_date, po_ref) VALUES (%s, %s, %s, %s, %s)", (safe_name, v_name_c, chal_no, chal_date.strftime('%Y-%m-%d'), po_val_c))
+                            execute_data("INSERT INTO inward_challans (created_by, vendor_name, challan_no, challan_date, po_ref, amount) VALUES (%s, %s, %s, %s, %s, %s)", (safe_name, v_name_c, chal_no, chal_date.strftime('%Y-%m-%d'), po_val_c, chal_amt))
                             st.success(f"✅ Material recorded on Challan No {chal_no}. Awaiting Vendor Invoice!")
                             time.sleep(1)
                             st.rerun()
@@ -732,19 +736,19 @@ else:
                 if "Against" in bill_type:
                     with st.form("add_pur_inv_chal", clear_on_submit=True):
                         pend_chal_db = fetch_data("SELECT * FROM inward_challans WHERE created_by=%s AND status='UNBILLED' AND is_deleted=0", (safe_name,))
-                        pend_chal_opts = ["-- Select Unbilled Challan --"] + [f"{c['vendor_name']} | Challan: {c['challan_no']}" for c in pend_chal_db]
+                        pend_chal_opts = ["-- Select Unbilled Challan --"] + [f"{c['vendor_name']} | Challan: {c['challan_no']} | ₹{c.get('amount',0.0)}" for c in pend_chal_db]
                         sel_chal_str = st.selectbox("Select Pending Vendor Challan *", pend_chal_opts)
                         
                         inv_no = st.text_input("Vendor Bill / Invoice No. *", key="ib1")
                         c3, c5, c6 = st.columns(3)
                         inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id1")
-                        amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia1")
+                        amt = c5.number_input("Total Final Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia1")
                         credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1, key="ic1")
 
                         if st.form_submit_button("💾 Save Bill & Link to Challan"):
                             if sel_chal_str != "-- Select Unbilled Challan --" and inv_no and amt > 0:
                                 v_n = sel_chal_str.split(" | Challan: ")[0]
-                                c_n = sel_chal_str.split(" | Challan: ")[1]
+                                c_n = sel_chal_str.split(" | Challan: ")[1].split(" | ₹")[0]
                                 
                                 chal_rec = fetch_data("SELECT challan_date, po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
                                 po_val = chal_rec[0]['po_ref'] if chal_rec else ""
@@ -756,7 +760,7 @@ else:
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_n, inv_no, inv_date.strftime('%Y-%m-%d'), f"PO: {po_val} | Chal: {c_n}", amt, due_d.strftime('%Y-%m-%d')))
                                 execute_data("UPDATE inward_challans SET status='BILLED' WHERE vendor_name=%s AND challan_no=%s AND created_by=%s", (v_n, c_n, safe_name))
 
-                                st.success(f"✅ Billed! Due date ({due_d.strftime('%d %b %Y')}) calculated strictly from material arrival date ({ch_date_obj.strftime('%d %b')}).")
+                                st.success(f"✅ Challan Linked & Billed! Due date ({due_d.strftime('%d %b %Y')}) calculated strictly from material arrival date ({ch_date_obj.strftime('%d %b')}).")
                                 time.sleep(2.5)
                                 st.rerun()
                             else:
