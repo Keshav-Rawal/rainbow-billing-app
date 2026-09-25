@@ -108,7 +108,6 @@ def init_db():
                 )
             """)
             
-            # NAYA PAYABLES (VENDOR BILLS) TABLE
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS purchase_invoices (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -196,7 +195,6 @@ def get_ist_time():
     ist_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
     return ist_time.strftime("%d/%m/%Y %I:%M %p")
 
-# 🔴 CUSTOM INDIAN CURRENCY CALL (Removed 'Rupees') 🔴
 def get_indian_currency_words(amount):
     amount = round(float(amount), 2)
     rupees = int(amount)
@@ -666,12 +664,15 @@ else:
 
         elif menu == "💳 Vendor Payments":
             st.title("💳 Accounts Payable (Khata Tracker)")
-            st.write("Track your incoming vendor bills and **45-days payment cycles** automatically.")
+            st.write("Track your incoming vendor bills and **dynamic payment cycles** automatically.")
             
             tab_add, tab_pending, tab_paid = st.tabs(["➕ Add Purchase Bill", "⏳ Pending Payments", "✅ Paid History"])
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             party_names = [p['party_name'] for p in parties_db]
+            
+            all_pos = fetch_data("SELECT po_no FROM purchase_orders WHERE is_deleted=0 ORDER BY id DESC")
+            po_dropdown_list = ["-- Direct Bill (No PO) --"] + [p['po_no'] for p in all_pos]
             
             with tab_add:
                 st.markdown("### Enter New Vendor Invoice")
@@ -680,16 +681,18 @@ else:
                     v_name = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names)
                     inv_no = c2.text_input("Vendor Bill / Invoice No. *")
                     
-                    c3, c4, c5 = st.columns(3)
+                    c3, c4, c5, c6 = st.columns(4)
                     inv_date = c3.date_input("Bill Date *", datetime.date.today())
-                    po_ref = c4.text_input("Against P.O. No. (Optional)")
+                    po_ref = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list)
                     amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0)
+                    credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1)
                     
-                    if st.form_submit_button("💾 Save Bill & Track 45-Days"):
+                    if st.form_submit_button("💾 Save Bill & Track Date"):
                         if v_name != "-- Select Vendor --" and inv_no and amt > 0:
-                            due_d = inv_date + datetime.timedelta(days=45)
-                            execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_ref, amt, due_d.strftime('%Y-%m-%d')))
-                            st.success(f"✅ Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')}")
+                            po_val = "" if po_ref == "-- Direct Bill (No PO) --" else po_ref
+                            due_d = inv_date + datetime.timedelta(days=credit_days)
+                            execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_val, amt, due_d.strftime('%Y-%m-%d')))
+                            st.success(f"✅ Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')} ({credit_days} Days)")
                             time.sleep(1.5)
                             st.rerun()
                         else:
@@ -712,7 +715,11 @@ else:
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <h4 style="margin:0; color:#1a4f8b;">{p['vendor_name']}</h4>
-                                    <p style="margin:2px 0; font-size:14px;"><strong>Bill No:</strong> {p['invoice_no']} | <strong>Bill Date:</strong> {inv_obj.strftime('%d %b %Y')} | <strong>PO Ref:</strong> {p['po_ref']}</p>
+                                    <p style="margin:4px 0; font-size:15px;">
+                                        <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>Bill No:</strong> {p['invoice_no']}</span> | 
+                                        <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>PO Ref:</strong> {p['po_ref'] if p['po_ref'] else 'N/A'}</span>
+                                    </p>
+                                    <p style="margin:2px 0; font-size:14px; color:#555;">Bill Date: {inv_obj.strftime('%d %b %Y')}</p>
                                 </div>
                                 <div style="text-align: right;">
                                     <h3 style="margin:0; color:#d32f2f;">₹ {p['amount']:,.2f}</h3>
@@ -721,9 +728,17 @@ else:
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
-                        if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}"):
-                            execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
-                            st.rerun()
+                        
+                        c_pay, c_del = st.columns([3, 1])
+                        with c_pay:
+                            if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}", use_container_width=True):
+                                execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
+                                st.rerun()
+                        with c_del:
+                            if st.button("🗑️ Delete Bill", key=f"del_pen_{p['id']}", use_container_width=True):
+                                execute_data("UPDATE purchase_invoices SET is_deleted=1 WHERE id=%s", (p['id'],))
+                                st.rerun()
+                        st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                 else:
                     st.info("No pending payments! You are all clear. 🎉")
                     
@@ -731,12 +746,18 @@ else:
                 paid_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PAID' AND is_deleted=0 ORDER BY paid_date DESC LIMIT 50", (safe_name,))
                 if paid_data:
                     st.markdown("### ✅ Recently Cleared Invoices")
-                    df = pd.DataFrame(paid_data)
-                    df['invoice_date'] = pd.to_datetime(df['invoice_date']).dt.strftime('%d %b %Y')
-                    df['paid_date'] = pd.to_datetime(df['paid_date']).dt.strftime('%d %b %Y')
-                    df = df[['vendor_name', 'invoice_no', 'amount', 'invoice_date', 'paid_date', 'po_ref']]
-                    df.rename(columns={'vendor_name':'Vendor', 'invoice_no':'Bill No', 'amount':'Amount (₹)', 'invoice_date':'Bill Date', 'paid_date':'Paid On', 'po_ref':'PO Ref'}, inplace=True)
-                    st.dataframe(df, use_container_width=True)
+                    
+                    st.markdown("**Vendor & Invoice Details**")
+                    for p in paid_data:
+                        c1, c2, c3, c4, c5 = st.columns([2.5, 2.5, 2, 2, 1])
+                        c1.write(f"**{p['vendor_name']}**")
+                        c2.write(f"Bill: {p['invoice_no']} | PO: {p['po_ref']}")
+                        c3.write(f"₹ {p['amount']:,.2f}")
+                        c4.write(f"Paid: {p['paid_date']}")
+                        if c5.button("🗑️", key=f"del_paid_{p['id']}"):
+                            execute_data("UPDATE purchase_invoices SET is_deleted=1 WHERE id=%s", (p['id'],))
+                            st.rerun()
+                        st.markdown("---")
                 else:
                     st.info("No paid history found.")
 
@@ -1242,6 +1263,7 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
+                    # HSN is now optional for PO, so we don't check it here.
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
