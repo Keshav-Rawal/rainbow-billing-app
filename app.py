@@ -109,13 +109,26 @@ def init_db():
             """)
             
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS inward_challans (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    created_by VARCHAR(100),
+                    vendor_name VARCHAR(100),
+                    challan_no VARCHAR(50),
+                    challan_date DATE,
+                    po_ref VARCHAR(50),
+                    status VARCHAR(20) DEFAULT 'UNBILLED',
+                    is_deleted INT DEFAULT 0
+                )
+            """)
+            
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS purchase_invoices (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     created_by VARCHAR(100),
                     vendor_name VARCHAR(100),
                     invoice_no VARCHAR(50),
                     invoice_date DATE,
-                    po_ref VARCHAR(50),
+                    po_ref VARCHAR(255),
                     amount FLOAT,
                     due_date DATE,
                     status VARCHAR(20) DEFAULT 'PENDING',
@@ -565,6 +578,7 @@ else:
                     execute_data("TRUNCATE TABLE purchase_orders", ())
                     execute_data("TRUNCATE TABLE company_profiles", ())
                     execute_data("TRUNCATE TABLE purchase_invoices", ())
+                    execute_data("TRUNCATE TABLE inward_challans", ())
                     execute_data("DELETE FROM users WHERE uid != 'boss'", ()) 
                     st.success("✅ Factory Reset Complete! System is now 100% fresh and ready to sell.")
                     time.sleep(2)
@@ -609,6 +623,7 @@ else:
                             execute_data("DELETE FROM challans WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM purchase_orders WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM purchase_invoices WHERE created_by=%s", (t_name,))
+                            execute_data("DELETE FROM inward_challans WHERE created_by=%s", (t_name,))
                             
                             st.success(f"✅ Client '{t_name}' and their entire dataset has been wiped!")
                             time.sleep(1.5)
@@ -621,7 +636,7 @@ else:
             st.info("No active clients available to delete.")
     
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "💳 Vendor Payments", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "📥 Purchase & Payables", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Partner Dashboard")
@@ -662,11 +677,16 @@ else:
                         
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
-        elif menu == "💳 Vendor Payments":
-            st.title("💳 Accounts Payable (Khata Tracker)")
-            st.write("Track your incoming vendor bills and **dynamic payment cycles** automatically.")
+        elif menu == "📥 Purchase & Payables":
+            st.title("📥 Purchase Management & Payables")
+            st.write("Track incoming Vendor Challans (GRN), Bills, and automatically calculate Due Dates.")
             
-            tab_add, tab_pending, tab_paid = st.tabs(["➕ Add Purchase Bill", "⏳ Pending Payments", "✅ Paid History"])
+            tab_inward, tab_add_bill, tab_pending, tab_paid = st.tabs([
+                "📦 1. Inward Vendor Challan", 
+                "🧾 2. Convert / Add Bill", 
+                "⏳ 3. Pending Payments", 
+                "✅ 4. Paid History"
+            ])
             
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             party_names = [p['party_name'] for p in parties_db]
@@ -674,29 +694,92 @@ else:
             all_pos = fetch_data("SELECT po_no FROM purchase_orders WHERE is_deleted=0 ORDER BY id DESC")
             po_dropdown_list = ["-- Direct Bill (No PO) --"] + [p['po_no'] for p in all_pos]
             
-            with tab_add:
-                st.markdown("### Enter New Vendor Invoice")
-                with st.form("add_pur_inv", clear_on_submit=True):
+            with tab_inward:
+                st.markdown("### Record Material Received on Vendor Challan")
+                
+                pend_chal = fetch_data("SELECT * FROM inward_challans WHERE created_by=%s AND status='UNBILLED' AND is_deleted=0 ORDER BY id DESC", (safe_name,))
+                if pend_chal:
+                    with st.expander("👀 View Pending (Unbilled) Vendor Challans", expanded=False):
+                        for pc in pend_chal:
+                            col_c1, col_c2 = st.columns([4, 1])
+                            col_c1.info(f"**Vendor:** {pc['vendor_name']} | **Challan:** {pc['challan_no']} | **Date:** {pc['challan_date']} | **PO Ref:** {pc['po_ref']}")
+                            if col_c2.button("🗑️ Delete", key=f"del_ic_{pc['id']}", use_container_width=True):
+                                execute_data("UPDATE inward_challans SET is_deleted=1 WHERE id=%s", (pc['id'],))
+                                st.rerun()
+                
+                with st.form("add_inward_challan", clear_on_submit=True):
                     c1, c2 = st.columns(2)
-                    v_name = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names)
-                    inv_no = c2.text_input("Vendor Bill / Invoice No. *")
-                    
-                    c3, c4, c5, c6 = st.columns(4)
-                    inv_date = c3.date_input("Bill Date *", datetime.date.today())
-                    po_ref = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list)
-                    amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0)
-                    credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1)
-                    
-                    if st.form_submit_button("💾 Save Bill & Track Date"):
-                        if v_name != "-- Select Vendor --" and inv_no and amt > 0:
-                            po_val = "" if po_ref == "-- Direct Bill (No PO) --" else po_ref
-                            due_d = inv_date + datetime.timedelta(days=credit_days)
-                            execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_val, amt, due_d.strftime('%Y-%m-%d')))
-                            st.success(f"✅ Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')} ({credit_days} Days)")
-                            time.sleep(1.5)
+                    v_name_c = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names, key="v_chal")
+                    chal_no = c2.text_input("Vendor Challan No. *")
+                    c3, c4 = st.columns(2)
+                    chal_date = c3.date_input("Challan Date *", datetime.date.today())
+                    po_ref_c = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list, key="po_chal")
+
+                    if st.form_submit_button("💾 Save Inward Challan (GRN)"):
+                        if v_name_c != "-- Select Vendor --" and chal_no:
+                            po_val_c = "" if po_ref_c == "-- Direct Bill (No PO) --" else po_ref_c
+                            execute_data("INSERT INTO inward_challans (created_by, vendor_name, challan_no, challan_date, po_ref) VALUES (%s, %s, %s, %s, %s)", (safe_name, v_name_c, chal_no, chal_date.strftime('%Y-%m-%d'), po_val_c))
+                            st.success(f"✅ Material recorded on Challan No {chal_no}. Awaiting Vendor Invoice!")
+                            time.sleep(1)
                             st.rerun()
                         else:
-                            st.error("⚠️ Please select a Vendor and fill Bill No. and Amount.")
+                            st.error("⚠️ Please select a Vendor and fill Challan No.")
+
+            with tab_add_bill:
+                st.markdown("### Enter Vendor Invoice")
+                bill_type = st.radio("Select Billing Workflow:", ["Against Pending Vendor Challan", "Direct Purchase Bill (No prior challan entry)"], horizontal=True)
+
+                if "Against" in bill_type:
+                    with st.form("add_pur_inv_chal", clear_on_submit=True):
+                        pend_chal_db = fetch_data("SELECT * FROM inward_challans WHERE created_by=%s AND status='UNBILLED' AND is_deleted=0", (safe_name,))
+                        pend_chal_opts = ["-- Select Unbilled Challan --"] + [f"{c['vendor_name']} | Challan: {c['challan_no']}" for c in pend_chal_db]
+                        sel_chal_str = st.selectbox("Select Pending Vendor Challan *", pend_chal_opts)
+                        
+                        inv_no = st.text_input("Vendor Bill / Invoice No. *", key="ib1")
+                        c3, c5, c6 = st.columns(3)
+                        inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id1")
+                        amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia1")
+                        credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1, key="ic1")
+
+                        if st.form_submit_button("💾 Save Bill & Link to Challan"):
+                            if sel_chal_str != "-- Select Unbilled Challan --" and inv_no and amt > 0:
+                                v_n = sel_chal_str.split(" | Challan: ")[0]
+                                c_n = sel_chal_str.split(" | Challan: ")[1]
+                                
+                                chal_rec = fetch_data("SELECT po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
+                                po_val = chal_rec[0]['po_ref'] if chal_rec else ""
+
+                                due_d = inv_date + datetime.timedelta(days=credit_days)
+                                execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_n, inv_no, inv_date.strftime('%Y-%m-%d'), f"PO: {po_val} | Chal: {c_n}", amt, due_d.strftime('%Y-%m-%d')))
+                                execute_data("UPDATE inward_challans SET status='BILLED' WHERE vendor_name=%s AND challan_no=%s AND created_by=%s", (v_n, c_n, safe_name))
+
+                                st.success(f"✅ Challan Linked & Billed! Due date: {due_d.strftime('%d %b %Y')}")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Please select a Challan, enter Invoice No and Amount.")
+                else:
+                    with st.form("add_pur_inv_direct", clear_on_submit=True):
+                        c1, c2 = st.columns(2)
+                        v_name = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names)
+                        inv_no = c2.text_input("Vendor Bill / Invoice No. *", key="ib2")
+                        
+                        c3, c4, c5, c6 = st.columns(4)
+                        inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id2")
+                        po_ref = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list)
+                        amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia2")
+                        credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1, key="ic2")
+                        
+                        if st.form_submit_button("💾 Save Direct Bill"):
+                            if v_name != "-- Select Vendor --" and inv_no and amt > 0:
+                                po_val = "" if po_ref == "-- Direct Bill (No PO) --" else po_ref
+                                due_d = inv_date + datetime.timedelta(days=credit_days)
+                                execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_val, amt, due_d.strftime('%Y-%m-%d')))
+                                st.success(f"✅ Direct Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')} ({credit_days} Days)")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Please select a Vendor and fill Bill No. and Amount.")
                             
             with tab_pending:
                 pending_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PENDING' AND is_deleted=0 ORDER BY due_date ASC", (safe_name,))
@@ -717,7 +800,7 @@ else:
                                     <h4 style="margin:0; color:#1a4f8b;">{p['vendor_name']}</h4>
                                     <p style="margin:4px 0; font-size:15px;">
                                         <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>Bill No:</strong> {p['invoice_no']}</span> | 
-                                        <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>PO Ref:</strong> {p['po_ref'] if p['po_ref'] else 'N/A'}</span>
+                                        <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>PO/Chal Ref:</strong> {p['po_ref'] if p['po_ref'] else 'N/A'}</span>
                                     </p>
                                     <p style="margin:2px 0; font-size:14px; color:#555;">Bill Date: {inv_obj.strftime('%d %b %Y')}</p>
                                 </div>
@@ -751,7 +834,7 @@ else:
                     for p in paid_data:
                         c1, c2, c3, c4, c5 = st.columns([2.5, 2.5, 2, 2, 1])
                         c1.write(f"**{p['vendor_name']}**")
-                        c2.write(f"Bill: {p['invoice_no']} | PO: {p['po_ref']}")
+                        c2.write(f"Bill: {p['invoice_no']} | PO/Chal: {p['po_ref']}")
                         c3.write(f"₹ {p['amount']:,.2f}")
                         c4.write(f"Paid: {p['paid_date']}")
                         if c5.button("🗑️", key=f"del_paid_{p['id']}"):
