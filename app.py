@@ -789,48 +789,78 @@ else:
                                 st.error("⚠️ Please select a Vendor and fill Bill No. and Amount.")
                             
             with tab_pending:
-                pending_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PENDING' AND is_deleted=0 ORDER BY due_date ASC", (safe_name,))
-                if pending_data:
-                    st.markdown("### 🚨 Outstanding Vendor Dues")
-                    for p in pending_data:
-                        due_obj = p['due_date'] if isinstance(p['due_date'], datetime.date) else datetime.datetime.strptime(p['due_date'], '%Y-%m-%d').date()
-                        inv_obj = p['invoice_date'] if isinstance(p['invoice_date'], datetime.date) else datetime.datetime.strptime(p['invoice_date'], '%Y-%m-%d').date()
-                        days_left = (due_obj - datetime.date.today()).days
+                all_vendor_invoices = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND is_deleted=0 ORDER BY due_date ASC", (safe_name,))
+                
+                if all_vendor_invoices:
+                    st.markdown("### 🚨 Outstanding Vendor Dues & Ledger")
+                    
+                    vendor_ledger = {}
+                    for p in all_vendor_invoices:
+                        v_name = p['vendor_name']
+                        if v_name not in vendor_ledger:
+                            vendor_ledger[v_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": []}
                         
-                        box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
-                        status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
+                        amt = float(p['amount'])
+                        vendor_ledger[v_name]["total_billed"] += amt
                         
-                        st.markdown(f"""
-                        <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <h4 style="margin:0; color:#1a4f8b;">{p['vendor_name']}</h4>
-                                    <p style="margin:4px 0; font-size:15px;">
-                                        <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>Bill No:</strong> {p['invoice_no']}</span> | 
-                                        <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>PO/Chal Ref:</strong> {p['po_ref'] if p['po_ref'] else 'N/A'}</span>
-                                    </p>
-                                    <p style="margin:2px 0; font-size:14px; color:#555;">Bill Date: {inv_obj.strftime('%d %b %Y')}</p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <h3 style="margin:0; color:#d32f2f;">₹ {p['amount']:,.2f}</h3>
-                                    <p style="margin:2px 0; font-weight:bold; font-size:12px; color: {'red' if days_left < 0 else 'orange' if days_left <=7 else 'green'};">{status_text} (Due: {due_obj.strftime('%d %b %Y')})</p>
-                                </div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        c_pay, c_del = st.columns([3, 1])
-                        with c_pay:
-                            if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}", use_container_width=True):
-                                execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
-                                st.rerun()
-                        with c_del:
-                            if st.button("🗑️ Delete Bill", key=f"del_pen_{p['id']}", use_container_width=True):
-                                execute_data("UPDATE purchase_invoices SET is_deleted=1 WHERE id=%s", (p['id'],))
-                                st.rerun()
-                        st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                        if p['status'] == 'PAID':
+                            vendor_ledger[v_name]["total_paid"] += amt
+                        else:
+                            vendor_ledger[v_name]["pending_bills"].append(p)
+                    
+                    pending_vendors = {k: v for k, v in vendor_ledger.items() if len(v["pending_bills"]) > 0}
+                    
+                    if pending_vendors:
+                        for v_name, data in pending_vendors.items():
+                            balance = data["total_billed"] - data["total_paid"]
+                            
+                            with st.expander(f"🏢 {v_name} | Pending Balance: ₹ {balance:,.2f}"):
+                                c1, c2, c3 = st.columns(3)
+                                c1.metric("Credit (Total Billed)", f"₹ {data['total_billed']:,.2f}")
+                                c2.metric("Debit (Total Paid)", f"₹ {data['total_paid']:,.2f}")
+                                c3.metric("Current Balance", f"₹ {balance:,.2f}")
+                                
+                                st.markdown("#### ⏳ Pending Invoices for this Vendor")
+                                for p in data["pending_bills"]:
+                                    due_obj = p['due_date'] if isinstance(p['due_date'], datetime.date) else datetime.datetime.strptime(p['due_date'], '%Y-%m-%d').date()
+                                    inv_obj = p['invoice_date'] if isinstance(p['invoice_date'], datetime.date) else datetime.datetime.strptime(p['invoice_date'], '%Y-%m-%d').date()
+                                    days_left = (due_obj - datetime.date.today()).days
+                                    
+                                    box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
+                                    status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
+                                    
+                                    st.markdown(f"""
+                                    <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <p style="margin:4px 0; font-size:15px;">
+                                                    <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>Bill No:</strong> {p['invoice_no']}</span> | 
+                                                    <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>PO/Chal Ref:</strong> {p['po_ref'] if p['po_ref'] else 'N/A'}</span>
+                                                </p>
+                                                <p style="margin:2px 0; font-size:14px; color:#555;">Bill Date: {inv_obj.strftime('%d %b %Y')}</p>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <h3 style="margin:0; color:#d32f2f;">₹ {p['amount']:,.2f}</h3>
+                                                <p style="margin:2px 0; font-weight:bold; font-size:12px; color: {'red' if days_left < 0 else 'orange' if days_left <=7 else 'green'};">{status_text} (Due: {due_obj.strftime('%d %b %Y')})</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    c_pay, c_del = st.columns([3, 1])
+                                    with c_pay:
+                                        if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}", use_container_width=True):
+                                            execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
+                                            st.rerun()
+                                    with c_del:
+                                        if st.button("🗑️ Delete Bill", key=f"del_pen_{p['id']}", use_container_width=True):
+                                            execute_data("UPDATE purchase_invoices SET is_deleted=1 WHERE id=%s", (p['id'],))
+                                            st.rerun()
+                                    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                    else:
+                        st.info("No pending payments! You are all clear. 🎉")
                 else:
-                    st.info("No pending payments! You are all clear. 🎉")
+                    st.info("No purchase bills found yet. 🎉")
                     
             with tab_paid:
                 paid_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PAID' AND is_deleted=0 ORDER BY paid_date DESC LIMIT 50", (safe_name,))
@@ -1197,10 +1227,8 @@ else:
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
 
-            # 🔴 AUTO INCREMENT PO NUMBER (e.g. RI/2026-27/101) 🔴
             auto_po = get_next_auto_no('purchase_orders', 'po_no', safe_name)
             
-            # If it's a completely new system ("1") or an old format like "RI-02"
             if auto_po == "1" or auto_po.startswith("RI-"):
                 now = datetime.datetime.now()
                 yr = now.year
@@ -1353,7 +1381,6 @@ else:
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
                     
-                    # HSN is now optional for PO, so we don't check it here.
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
@@ -1556,10 +1583,10 @@ else:
                     else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y') if po_date else "", b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
-                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original (W)")
-                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate (P)")
-                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate (G)")
-                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy (Y)")
+                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original")
+                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate")
+                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate")
+                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy")
 
                     full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
                     full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
@@ -1826,5 +1853,5 @@ else:
 
                     if missing:
                         display_validation_error(missing)
-                    else:
+                    else: 
                         confirm_save_dialog("Delivery Challan", "trigger_save_chal")
