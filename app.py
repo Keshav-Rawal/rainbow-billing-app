@@ -521,6 +521,75 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
     </div>
     """
 
+def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total_paid, balance):
+    rows_html = ""
+    for idx, b in enumerate(bills):
+        inv_date = b['invoice_date'].strftime('%d/%m/%Y') if isinstance(b['invoice_date'], datetime.date) else b['invoice_date']
+        paid_str = b['paid_date'].strftime('%d/%m/%Y') if hasattr(b, 'paid_date') and isinstance(b['paid_date'], datetime.date) else (b.get('paid_date') or '-')
+        status = b['status']
+        amt = float(b['amount'])
+        color = "green" if status == "PAID" else "red"
+        
+        rows_html += f"<tr>"
+        rows_html += f"<td style='text-align:center; padding: 6px; border: 1px solid #ccc;'>{idx+1}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{inv_date}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b['invoice_no']}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b['po_ref'] or '-'}</td>"
+        rows_html += f"<td style='text-align:right; padding: 6px; border: 1px solid #ccc;'>{amt:,.2f}</td>"
+        rows_html += f"<td style='text-align:center; color:{color}; font-weight:bold; padding: 6px; border: 1px solid #ccc;'>{status}</td>"
+        rows_html += f"<td style='text-align:center; padding: 6px; border: 1px solid #ccc;'>{paid_str}</td>"
+        rows_html += f"</tr>"
+
+    return f"""
+    <html><head><style>
+        @page {{ size: A4; margin: 15mm; }}
+        body {{ font-family: Arial, sans-serif; font-size: 12px; color: #000; }}
+        h1 {{ text-align: center; color: #1a4f8b; margin-bottom: 5px; }}
+        .header-info {{ text-align: center; margin-bottom: 20px; font-size: 11px; }}
+        .title {{ text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px; }}
+        .vendor-info {{ margin-bottom: 15px; font-size: 12px; border: 1px solid #000; padding: 10px; background-color: #f8f9fa; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }}
+        th {{ background-color: #1a4f8b; color: white; padding: 6px; border: 1px solid #000; text-align: left; }}
+        .summary {{ width: 45%; float: right; }}
+        .summary th {{ background-color: #f0f0f0; color: #000; }}
+        .summary th, .summary td {{ padding: 6px; border: 1px solid #000; }}
+    </style></head>
+    <body>
+        <h1>{comp['name'].upper()}</h1>
+        <div class="header-info">{comp['address']}<br>GSTIN: {comp['gstin']} | Contact: {comp['contact']}</div>
+        <div class="title">VENDOR LEDGER STATEMENT</div>
+        
+        <div class="vendor-info">
+            <strong>Vendor Name:</strong> {vendor_name}<br>
+            <strong>Statement Generated On:</strong> {datetime.datetime.now().strftime('%d/%m/%Y %I:%M %p')}
+        </div>
+        
+        <table>
+            <tr>
+                <th>S.No</th><th>Bill Date</th><th>Bill No.</th><th>PO / Ref</th><th>Amount (INR)</th><th>Status</th><th>Paid On</th>
+            </tr>
+            {rows_html}
+        </table>
+        
+        <div class="summary">
+            <table>
+                <tr><th>Total Billed (Credit)</th><td style="text-align:right;">{total_billed:,.2f}</td></tr>
+                <tr><th>Total Paid (Debit)</th><td style="text-align:right;">{total_paid:,.2f}</td></tr>
+                <tr><th style="background-color:#d32f2f; color:white;">Balance Due</th><td style="text-align:right; font-weight:bold; color:#d32f2f;">{balance:,.2f}</td></tr>
+            </table>
+        </div>
+        <div style="clear:both;"></div>
+        <br><br><br>
+        <div style="text-align:right;">
+            <strong>For {comp['name'].upper()}</strong><br><br><br>
+            Authorized Signatory
+        </div>
+        <div style="text-align:center; font-size: 9px; margin-top: 30px; color: #666;">
+            ** This is a computer-generated statement **
+        </div>
+    </body></html>
+    """
+
 # ==========================================
 # 4. APP SYSTEM & SCREENS
 # ==========================================
@@ -798,10 +867,11 @@ else:
                     for p in all_vendor_invoices:
                         v_name = p['vendor_name']
                         if v_name not in vendor_ledger:
-                            vendor_ledger[v_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": []}
+                            vendor_ledger[v_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": [], "all_bills": []}
                         
                         amt = float(p['amount'])
                         vendor_ledger[v_name]["total_billed"] += amt
+                        vendor_ledger[v_name]["all_bills"].append(p)
                         
                         if p['status'] == 'PAID':
                             vendor_ledger[v_name]["total_paid"] += amt
@@ -819,6 +889,19 @@ else:
                                 c1.metric("Credit (Total Billed)", f"₹ {data['total_billed']:,.2f}")
                                 c2.metric("Debit (Total Paid)", f"₹ {data['total_paid']:,.2f}")
                                 c3.metric("Current Balance", f"₹ {balance:,.2f}")
+                                
+                                stmt_html = generate_vendor_statement_html(my_company, v_name, data['all_bills'], data['total_billed'], data['total_paid'], balance)
+                                stmt_pdf = HTML(string=stmt_html).write_pdf()
+                                
+                                st.download_button(
+                                    label="📄 Download Vendor Ledger Statement (PDF)",
+                                    data=stmt_pdf,
+                                    file_name=f"Ledger_Statement_{v_name.replace(' ', '_')}.pdf",
+                                    mime="application/pdf",
+                                    key=f"dl_stmt_{v_name}",
+                                    type="primary"
+                                )
+                                st.markdown("---")
                                 
                                 st.markdown("#### ⏳ Pending Invoices for this Vendor")
                                 for p in data["pending_bills"]:
