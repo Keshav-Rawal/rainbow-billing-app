@@ -553,6 +553,7 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
         .summary {{ width: 45%; float: right; }}
         .summary th {{ background-color: #f0f0f0; color: #000; }}
         .summary th, .summary td {{ padding: 6px; border: 1px solid #000; }}
+        .footer-sig {{ text-align: center; margin-top: 30px; float: right; width: 200px; }}
     </style></head>
     <body>
         <h1>{comp['name'].upper()}</h1>
@@ -579,11 +580,14 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
             </table>
         </div>
         <div style="clear:both;"></div>
-        <br><br><br>
-        <div style="text-align:right;">
-            <strong>For {comp['name'].upper()}</strong><br><br><br>
-            Authorized Signatory
+        
+        <div class="footer-sig">
+            <strong>For {comp['name'].upper()}</strong>
+            <div style="text-align:center;">{get_signature_img()}</div>
+            <div style="border-top:1px solid #000; padding-top:2px;">Authorized Signatory</div>
         </div>
+        
+        <div style="clear:both;"></div>
         <div style="text-align:center; font-size: 9px; margin-top: 30px; color: #666;">
             ** This is a computer-generated statement **
         </div>
