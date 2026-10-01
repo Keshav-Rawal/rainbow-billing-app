@@ -99,7 +99,7 @@ def init_db():
             conn = get_connection(); cursor = conn.cursor()
             
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
-            cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255), bank_name VARCHAR(100), bank_acc VARCHAR(50), bank_ifsc VARCHAR(50))")
             cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), eway_bill_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
             
             cursor.execute("""
@@ -161,6 +161,14 @@ def init_db():
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN email VARCHAR(100)"); conn.commit()
             except: pass
+            
+            # 🟢 BANK COLUMNS DYNAMIC UPDATE
+            try: cursor.execute("ALTER TABLE company_profiles ADD COLUMN bank_name VARCHAR(100)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE company_profiles ADD COLUMN bank_acc VARCHAR(50)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE company_profiles ADD COLUMN bank_ifsc VARCHAR(50)"); conn.commit()
+            except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
@@ -195,7 +203,14 @@ def execute_data(query, params):
 
 def get_company_profile(uid):
     data = fetch_data("SELECT * FROM company_profiles WHERE uid = %s", (uid,))
-    return data[0] if data else {"name": "RAINBOW INDUSTRIES", "gstin": "09AAAAA0000A1Z1", "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", "state": "UP", "state_code": "09", "tagline": "(An ISO 9001:2015 Certified Company)", "contact": "Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com", "manufacturing": "Manufactures of : Plastic Components, Automobiles, Electricals & Electronics"}
+    return data[0] if data else {
+        "name": "RAINBOW INDUSTRIES", "gstin": "09AAAAA0000A1Z1", 
+        "address": "2804, Dhoom Manikpur, Dadri (G.B. Nagar) U.P. 203207", 
+        "state": "UP", "state_code": "09", "tagline": "(An ISO 9001:2015 Certified Company)", 
+        "contact": "Mob.: 9711325563, 8826366314 | Email: rainbowindustries647@gmail.com", 
+        "manufacturing": "Manufactures of : Plastic Components, Automobiles, Electricals & Electronics",
+        "bank_name": "Bank of India", "bank_acc": "714120110000072", "bank_ifsc": "BKID0007141"
+    }
 
 def parse_date(date_str):
     if date_str:
@@ -604,6 +619,12 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
 
 def generate_remittance_pdf(comp, payment_data):
     amt_words = get_indian_currency_words(payment_data['amount'])
+    
+    # Use dynamic bank details from company profile, fallback to NA if not set
+    bank_n = comp.get('bank_name') if comp.get('bank_name') else "N/A"
+    bank_a = comp.get('bank_acc') if comp.get('bank_acc') else "N/A"
+    bank_i = comp.get('bank_ifsc') if comp.get('bank_ifsc') else "N/A"
+
     html = f"""
     <html><head><style>
         @page {{ size: A4; margin: 15mm; }}
@@ -680,9 +701,9 @@ def generate_remittance_pdf(comp, payment_data):
         
         <div style="float: right; width: 45%; border: 1px solid #ccc; padding: 10px;">
             <table>
-                <tr><td><strong>Bank Name</strong></td><td>{payment_data.get('bank_name', 'Bank of India')}</td></tr>
-                <tr><td><strong>Bank Account</strong></td><td>{payment_data.get('acc_no', 'XXXXX')}</td></tr>
-                <tr><td><strong>Bank IFSC Code</strong></td><td>{payment_data.get('ifsc', 'XXXXX')}</td></tr>
+                <tr><td><strong>Bank Name</strong></td><td>{bank_n}</td></tr>
+                <tr><td><strong>Bank Account</strong></td><td>{bank_a}</td></tr>
+                <tr><td><strong>Bank IFSC Code</strong></td><td>{bank_i}</td></tr>
             </table>
         </div>
         
@@ -1052,7 +1073,7 @@ else:
                                     days_left = (due_obj - datetime.date.today()).days
                                     
                                     box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
-                                    status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
+                                    status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️️ Due in {days_left} Days"
                                     
                                     st.markdown(f"""
                                     <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
@@ -1081,10 +1102,7 @@ else:
                                                 'amount': p['amount'],
                                                 'bill_no': p['invoice_no'],
                                                 'bill_date': inv_obj.strftime('%d-%b-%y'),
-                                                'bill_amt': p['amount'],
-                                                'bank_name': 'Bank of India', 
-                                                'acc_no': '714120110000072',
-                                                'ifsc': 'BKID0007141'
+                                                'bill_amt': p['amount']
                                             }
                                             pdf_bytes = generate_remittance_pdf(my_company, payment_data)
                                             st.session_state[f'remittance_pdf_{p["id"]}'] = pdf_bytes
@@ -1097,7 +1115,7 @@ else:
                                     if st.session_state.get(f'remittance_pdf_{p["id"]}'):
                                         st.markdown("<div style='background-color:#e8f5e9; padding:15px; border-radius:8px; border: 1px solid #c8e6c9; margin-top:10px;'>", unsafe_allow_html=True)
                                         st.markdown("#### 🧾 Generate Payment Remittance Advice")
-                                        st.info("Format matches XXCNS_PAYMENT_REMITTANCE_106639976_1.pdf.")
+                                        st.info("Ensure your Bank Details are configured in 'Company Profile'.")
                                         ve = st.text_input("Vendor Email Address:", key=f"vemail_{p['id']}")
                                         
                                         col_d, col_s, col_f = st.columns(3)
@@ -1150,16 +1168,29 @@ else:
         elif menu == "⚙️ Company Profile":
             st.title("⚙️ Global Profile Configuration")
             st.write("Configure your exact organizational details here to ensure professional formatting on all commercial documents.")
+            
             c_name = st.text_input("Company/Factory Name *", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
             c_gst = st.text_input("GSTIN Number *", value=my_company["gstin"], key="c_gst")
             c_address = st.text_area("Registered Address *", value=my_company["address"], key="c_address")
-            c_state = st.text_input("State *", value=my_company["state"], key="c_state")
-            c_scode = st.text_input("State Code *", value=my_company["state_code"], key="c_scode")
+            
+            col_1, col_2 = st.columns(2)
+            with col_1: c_state = st.text_input("State *", value=my_company["state"], key="c_state")
+            with col_2: c_scode = st.text_input("State Code *", value=my_company["state_code"], key="c_scode")
+            
             c_contact = st.text_input("Contact Lines *", value=my_company.get("contact", ""), key="c_contact")
             c_manu = st.text_input("Business Scope *", value=my_company.get("manufacturing", ""), key="c_manu")
+            
+            st.markdown("---")
+            st.subheader("🏦 Bank Account Details (For Remittance Advice)")
+            st.info("These details will automatically print on the Payment Remittance Advice PDFs you generate for vendors.")
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1: c_bank_name = st.text_input("Bank Name", value=my_company.get("bank_name", ""), placeholder="e.g. Bank of India")
+            with col_b2: c_bank_acc = st.text_input("Account Number", value=my_company.get("bank_acc", ""), placeholder="e.g. 714120110000072")
+            with col_b3: c_bank_ifsc = st.text_input("IFSC Code", value=my_company.get("bank_ifsc", ""), placeholder="e.g. BKID0007141")
+
             if st.button("💾 Update Configuration", type="primary"):
-                execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu))
+                execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing, bank_name, bank_acc, bank_ifsc) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s, bank_name=%s, bank_acc=%s, bank_ifsc=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_bank_name, c_bank_acc, c_bank_ifsc, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_bank_name, c_bank_acc, c_bank_ifsc))
                 st.success("Configuration synchronized successfully."); time.sleep(0.5); st.rerun()
             
         elif menu == "📦 Add Master Data":
@@ -1349,7 +1380,7 @@ else:
                         if c5_edit.button("✏️", key=f"ec_{c['id']}"):
                             fd = fetch_data("SELECT * FROM challans WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📝 Delivery Challan"}); st.rerun()
-                        if c5_del.button("🗑️", key=f"dc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5_del.button("🗑️️", key=f"dc_{c['id']}"): execute_data("UPDATE challans SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("No active logs found for these parameters.")
             elif view_type == "Tax Invoices":
                 party_list = fetch_data("SELECT DISTINCT bill_to_name FROM tax_invoices WHERE created_by = %s AND is_deleted = 0", (safe_name,))
@@ -1429,7 +1460,7 @@ else:
                         if c5_edit.button("✏️", key=f"epo_{c['id']}"):
                             fd = fetch_data("SELECT * FROM purchase_orders WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "🛒 Purchase Order"}); st.rerun()
-                        if c5_del.button("🗑️️", key=f"dpo_{c['id']}"): execute_data("UPDATE purchase_orders SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5_del.button("🗑", key=f"dpo_{c['id']}"): execute_data("UPDATE purchase_orders SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("No active logs found for these parameters.")
 
         elif menu == "🗑️ Recycle Bin":
@@ -1901,7 +1932,7 @@ else:
 
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
-            if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
+            if mode == "UPDATE": st.warning("⚠️️ Modifying active document record.")
             
             def_chal_no = fd.get('challan_no', get_next_auto_no('challans', 'challan_no', safe_name)) if mode == "INSERT" else fd.get('challan_no','')
             def_date_time = get_ist_time()
