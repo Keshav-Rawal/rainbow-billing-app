@@ -13,6 +13,12 @@ import tempfile
 import os
 import base64
 
+# EMAIL IMPORTS 📧
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+
 # AI Library Load Check
 try:
     import google.generativeai as genai
@@ -153,6 +159,8 @@ def init_db():
             except: pass
             try: cursor.execute("ALTER TABLE inward_challans ADD COLUMN amount FLOAT DEFAULT 0.0"); conn.commit()
             except: pass
+            try: cursor.execute("ALTER TABLE party_master ADD COLUMN email VARCHAR(100)"); conn.commit()
+            except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
             except: pass
@@ -255,7 +263,7 @@ if "auth_logged_in" not in st.session_state:
 if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashboard"
 
 # ==========================================
-# 3. HTML GENERATOR FOR DOCUMENTS
+# 3. HTML GENERATORS FOR DOCUMENTS
 # ==========================================
 def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
     items_html = ""
@@ -594,6 +602,136 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
     </body></html>
     """
 
+def generate_remittance_pdf(comp, payment_data):
+    amt_words = get_indian_currency_words(payment_data['amount'])
+    html = f"""
+    <html><head><style>
+        @page {{ size: A4; margin: 15mm; }}
+        body {{ font-family: Arial, sans-serif; font-size: 11px; color: #000; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 6px; text-align: left; }}
+        th {{ background-color: #f0f0f0; }}
+        .header-title {{ text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; }}
+    </style></head>
+    <body>
+        <div style="float: left; width: 45%;">
+            <div style="font-size: 14px; font-weight: bold;">{comp['name'].upper()}</div>
+            <div>{comp['address']}</div>
+            <div>GSTIN: {comp['gstin']}</div>
+        </div>
+        <div style="float: right; width: 45%; text-align: right; font-size: 24px; font-weight: bold; color: #1a4f8b;">
+            {comp['name'].upper()}
+        </div>
+        <div style="clear: both; margin-bottom: 20px;"></div>
+        
+        <div class="header-title">Payment Remittance Advice</div>
+        
+        <div style="margin-bottom: 10px;">The following payment has been remitted.</div>
+        
+        <table>
+            <tr>
+                <td style="width: 25%;"><strong>Payment Reference Number</strong></td>
+                <td>{payment_data.get('pay_ref_no', 'N/A')}</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Date</strong></td>
+                <td>{payment_data.get('pay_date', datetime.date.today().strftime('%d-%b-%y')).upper()}</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Currency</strong></td>
+                <td>INR</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Amount</strong></td>
+                <td>{float(payment_data['amount']):.2f}</td>
+            </tr>
+        </table>
+        
+        <div style="font-weight: bold; margin-bottom: 5px;">Remittance Detail</div>
+        <table>
+            <tr>
+                <th>Document Reference Number</th>
+                <th>Document Date</th>
+                <th>Document Amount</th>
+                <th>Currency</th>
+                <th>Amount Paid</th>
+            </tr>
+            <tr>
+                <td>{payment_data['bill_no']}</td>
+                <td>{payment_data['bill_date']}</td>
+                <td>{float(payment_data['bill_amt']):.2f}</td>
+                <td>INR</td>
+                <td>{float(payment_data['amount']):.2f}</td>
+            </tr>
+            <tr>
+                <td colspan="2" style="border:none;"></td>
+                <td colspan="3" style="border:none; border-top: 1px solid #ccc; text-align: right;">
+                    <strong>Total Invoice Value (in Figures):</strong> {float(payment_data['amount']):.2f}<br><br>
+                    <strong>Total Invoice Value (in Words):</strong><br>{amt_words}
+                </td>
+            </tr>
+        </table>
+        
+        <div style="float: left; width: 45%; border: 1px solid #ccc; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 5px;">To Payee</div>
+            <strong>M/S {payment_data['vendor_name'].upper()}</strong><br>
+            {payment_data.get('vendor_address', '')}
+        </div>
+        
+        <div style="float: right; width: 45%; border: 1px solid #ccc; padding: 10px;">
+            <table>
+                <tr><td><strong>Bank Name</strong></td><td>{payment_data.get('bank_name', 'Bank of India')}</td></tr>
+                <tr><td><strong>Bank Account</strong></td><td>{payment_data.get('acc_no', 'XXXXX')}</td></tr>
+                <tr><td><strong>Bank IFSC Code</strong></td><td>{payment_data.get('ifsc', 'XXXXX')}</td></tr>
+            </table>
+        </div>
+        
+        <div style="clear: both; margin-top: 20px; font-size: 10px; font-style: italic;">
+            * Payments are subject to clearing in the Bank within 2-3 working days
+        </div>
+    </body>
+    </html>
+    """
+    return HTML(string=html).write_pdf()
+
+def send_remittance_email(vendor_email, vendor_name, pdf_bytes, my_company):
+    SENDER_EMAIL = st.secrets.get("email", {}).get("address", "rainbowindustries647@gmail.com") 
+    SENDER_PASSWORD = st.secrets.get("email", {}).get("app_password", "YOUR_APP_PASSWORD_HERE")
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"{my_company['name']} <{SENDER_EMAIL}>"
+        msg['To'] = vendor_email
+        msg['Subject'] = f"Payment Remittance Advice from {my_company['name']}"
+        
+        body = f"""Dear {vendor_name},
+
+Please find attached the Payment Remittance Advice against your recent invoice(s).
+
+The payment has been initiated to your registered bank account. Kindly note that payments are subject to clearing within 2-3 working days.
+
+Thank you for your continued partnership.
+
+Regards,
+{my_company['name']}
+{my_company.get('contact', '')}
+"""
+        msg.attach(MIMEText(body, 'plain'))
+        
+        part = MIMEApplication(pdf_bytes, Name="Payment_Remittance_Advice.pdf")
+        part['Content-Disposition'] = 'attachment; filename="Payment_Remittance_Advice.pdf"'
+        msg.attach(part)
+        
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return True, "Email sent successfully!"
+    except Exception as e:
+        return False, str(e)
+
+
 # ==========================================
 # 4. APP SYSTEM & SCREENS
 # ==========================================
@@ -826,7 +964,7 @@ else:
                                 chal_rec = fetch_data("SELECT challan_date, po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
                                 po_val = chal_rec[0]['po_ref'] if chal_rec else ""
                                 
-                                # 🔴 MSME LOGIC: Calculate due date from CHALLAN DATE, not Bill Date
+                                # MSME LOGIC: Calculate due date from CHALLAN DATE
                                 ch_date_obj = chal_rec[0]['challan_date'] if isinstance(chal_rec[0]['challan_date'], datetime.date) else datetime.datetime.strptime(str(chal_rec[0]['challan_date']), '%Y-%m-%d').date()
                                 due_d = ch_date_obj + datetime.timedelta(days=credit_days)
                                 
@@ -937,12 +1075,53 @@ else:
                                     c_pay, c_del = st.columns([3, 1])
                                     with c_pay:
                                         if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}", use_container_width=True):
-                                            execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
-                                            st.rerun()
+                                            payment_data = {
+                                                'vendor_name': v_name,
+                                                'pay_date': datetime.date.today().strftime('%d-%b-%y').upper(),
+                                                'amount': p['amount'],
+                                                'bill_no': p['invoice_no'],
+                                                'bill_date': inv_obj.strftime('%d-%b-%y'),
+                                                'bill_amt': p['amount'],
+                                                'bank_name': 'Bank of India', 
+                                                'acc_no': '714120110000072',
+                                                'ifsc': 'BKID0007141'
+                                            }
+                                            pdf_bytes = generate_remittance_pdf(my_company, payment_data)
+                                            st.session_state[f'remittance_pdf_{p["id"]}'] = pdf_bytes
+                                            
                                     with c_del:
                                         if st.button("🗑️ Delete Bill", key=f"del_pen_{p['id']}", use_container_width=True):
                                             execute_data("UPDATE purchase_invoices SET is_deleted=1 WHERE id=%s", (p['id'],))
                                             st.rerun()
+                                            
+                                    if st.session_state.get(f'remittance_pdf_{p["id"]}'):
+                                        st.markdown("<div style='background-color:#e8f5e9; padding:15px; border-radius:8px; border: 1px solid #c8e6c9; margin-top:10px;'>", unsafe_allow_html=True)
+                                        st.markdown("#### 🧾 Generate Payment Remittance Advice")
+                                        st.info("Format matches XXCNS_PAYMENT_REMITTANCE_106639976_1.pdf.")
+                                        ve = st.text_input("Vendor Email Address:", key=f"vemail_{p['id']}")
+                                        
+                                        col_d, col_s, col_f = st.columns(3)
+                                        col_d.download_button("📄 Download PDF", st.session_state[f'remittance_pdf_{p["id"]}'], file_name=f"Remittance_{v_name}.pdf", mime="application/pdf", key=f"dl_rem_{p['id']}", use_container_width=True)
+                                        
+                                        if col_s.button("📧 Send Email & Clear", key=f"smail_{p['id']}", type="primary", use_container_width=True):
+                                            with st.spinner("Sending email..."):
+                                                success, msg = send_remittance_email(ve, v_name, st.session_state[f'remittance_pdf_{p["id"]}'], my_company)
+                                            if success:
+                                                execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
+                                                st.success("✅ Email Sent & Payment Cleared!")
+                                                time.sleep(1.5)
+                                                del st.session_state[f'remittance_pdf_{p["id"]}']
+                                                st.rerun()
+                                            else:
+                                                st.error(f"Failed to send email: {msg}")
+                                                
+                                        if col_f.button("⏭️ Skip Email & Clear", key=f"skip_{p['id']}", use_container_width=True):
+                                            execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
+                                            st.success("✅ Payment Cleared without Email!")
+                                            time.sleep(1)
+                                            del st.session_state[f'remittance_pdf_{p["id"]}']
+                                            st.rerun()
+                                        st.markdown("</div>", unsafe_allow_html=True)
                                     st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
                     else:
                         st.info("No pending payments! You are all clear. 🎉")
@@ -1250,7 +1429,7 @@ else:
                         if c5_edit.button("✏️", key=f"epo_{c['id']}"):
                             fd = fetch_data("SELECT * FROM purchase_orders WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "🛒 Purchase Order"}); st.rerun()
-                        if c5_del.button("🗑️", key=f"dpo_{c['id']}"): execute_data("UPDATE purchase_orders SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5_del.button("🗑️️", key=f"dpo_{c['id']}"): execute_data("UPDATE purchase_orders SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("No active logs found for these parameters.")
 
         elif menu == "🗑️ Recycle Bin":
