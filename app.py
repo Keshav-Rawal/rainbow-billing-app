@@ -29,9 +29,11 @@ except ImportError:
 st.set_page_config(page_title="Rainbow ERP - Enterprise", layout="wide")
 
 # ==========================================
-# AUTO-SIGNATURE LOADER (BASE64)
+# AUTO-SIGNATURE LOADER (BASE64) - WITH OPTIONAL TOGGLE
 # ==========================================
-def get_signature_img():
+def get_signature_img(include_sig=True):
+    if not include_sig:
+        return '<br><br><br><br>'
     possible_paths = ["image_37ad75.png", "signature.png"]
     for p in possible_paths:
         if os.path.exists(p):
@@ -40,7 +42,9 @@ def get_signature_img():
                 return f'<br><img src="data:image/png;base64,{b64}" style="height: 40px; object-fit: contain; margin: 2px 0;" /><br>'
     return '<br><br><br><br>'
 
-def get_signature_img_po():
+def get_signature_img_po(include_sig=True):
+    if not include_sig:
+        return '<br><br>'
     possible_paths = ["image_37ad75.png", "signature.png"]
     for p in possible_paths:
         if os.path.exists(p):
@@ -97,23 +101,23 @@ def init_db():
     if "db_initialized" not in st.session_state:
         try:
             conn = get_connection(); cursor = conn.cursor()
-            
+
             cursor.execute("CREATE TABLE IF NOT EXISTS users (uid VARCHAR(50) PRIMARY KEY, password VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL, name VARCHAR(100) NOT NULL)")
             cursor.execute("CREATE TABLE IF NOT EXISTS company_profiles (uid VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gstin VARCHAR(50), address TEXT, state VARCHAR(50), state_code VARCHAR(20), tagline VARCHAR(200), contact VARCHAR(200), manufacturing VARCHAR(255), bank_name VARCHAR(100), bank_acc VARCHAR(50), bank_ifsc VARCHAR(50))")
-            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), eway_bill_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
-            
+            cursor.execute("CREATE TABLE IF NOT EXISTS challans (id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), challan_date VARCHAR(20), challan_no VARCHAR(50), eway_bill_no VARCHAR(50), party_name VARCHAR(100), party_address TEXT, party_gstin VARCHAR(50), party_state VARCHAR(50), party_state_code VARCHAR(20), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), transport_mode VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20) DEFAULT 'CGST', is_deleted INT DEFAULT 0, deleted_at DATETIME NULL)")
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tax_invoices (
                     id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), invoice_date VARCHAR(20), invoice_no VARCHAR(50), eway_bill_no VARCHAR(50), vendor_code VARCHAR(50), po_no VARCHAR(50), po_date VARCHAR(20), bill_to_name VARCHAR(100), bill_to_address TEXT, bill_to_gstin VARCHAR(50), bill_to_state VARCHAR(50), bill_to_state_code VARCHAR(20), ship_to_name VARCHAR(100), ship_to_address TEXT, ship_to_gstin VARCHAR(50), ship_to_state VARCHAR(50), ship_to_state_code VARCHAR(20), transport_mode VARCHAR(50), vehicle_no VARCHAR(50), date_of_supply VARCHAR(50), place_of_supply VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL
                 )
             """)
-            
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS purchase_orders (
                     id INT AUTO_INCREMENT PRIMARY KEY, created_by VARCHAR(100), po_date VARCHAR(20), po_no VARCHAR(50), vendor_name VARCHAR(100), vendor_address TEXT, vendor_gstin VARCHAR(50), vendor_state VARCHAR(50), vendor_state_code VARCHAR(20), delivery_date VARCHAR(50), payment_terms VARCHAR(100), items_data TEXT, amount VARCHAR(50), tax_type VARCHAR(20), is_deleted INT DEFAULT 0, deleted_at DATETIME NULL
                 )
             """)
-            
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inward_challans (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -127,7 +131,7 @@ def init_db():
                     is_deleted INT DEFAULT 0
                 )
             """)
-            
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS purchase_invoices (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -143,7 +147,7 @@ def init_db():
                     is_deleted INT DEFAULT 0
                 )
             """)
-            
+
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100), email VARCHAR(100), bank_name VARCHAR(100), bank_acc VARCHAR(50), bank_ifsc VARCHAR(50))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
@@ -157,9 +161,11 @@ def init_db():
             except: pass
             try: cursor.execute("ALTER TABLE challans ADD COLUMN eway_bill_no VARCHAR(50)"); conn.commit()
             except: pass
+            try: cursor.execute("ALTER TABLE challans ADD COLUMN tax_type VARCHAR(20) DEFAULT 'CGST'"); conn.commit()
+            except: pass
             try: cursor.execute("ALTER TABLE inward_challans ADD COLUMN amount FLOAT DEFAULT 0.0"); conn.commit()
             except: pass
-            
+
             # Party Bank Updates
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN email VARCHAR(100)"); conn.commit()
             except: pass
@@ -169,7 +175,7 @@ def init_db():
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN bank_ifsc VARCHAR(50)"); conn.commit()
             except: pass
-            
+
             # Company Bank Updates
             try: cursor.execute("ALTER TABLE company_profiles ADD COLUMN bank_name VARCHAR(100)"); conn.commit()
             except: pass
@@ -188,7 +194,7 @@ def init_db():
             cursor.execute("SELECT * FROM users WHERE uid='boss'")
             if not cursor.fetchone():
                 cursor.execute("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", ("boss", "admin123", "superadmin", "System Administrator"))
-            
+
             conn.commit(); cursor.close(); conn.close()
             st.session_state.db_initialized = True
         except: pass
@@ -252,9 +258,9 @@ def get_indian_currency_words(amount):
     amount = round(float(amount), 2)
     rupees = int(amount)
     paise = int(round((amount - rupees) * 100))
-    
+
     rupees_str = num2words(rupees, lang='en_IN').replace(',', '').title().replace(' And ', ' ')
-    
+
     if paise > 0:
         paise_str = num2words(paise, lang='en_IN').replace(',', '').title().replace(' And ', ' ')
         return f"{rupees_str} And {paise_str} Paise Only"
@@ -294,21 +300,27 @@ if "cust_menu" not in st.session_state: st.session_state.cust_menu = "🏢 Dashb
 # ==========================================
 # 3. HTML GENERATORS FOR DOCUMENTS
 # ==========================================
-def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
+def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title, include_sig=True):
     items_html = ""
     for idx, item in enumerate(items):
         qty_val = float(item.get('qty', 0))
         qty_str = f"{qty_val:g}"
         qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
-        
+
         items_html += f"<tr><td style='text-align:center; border: 1px solid #000;'>{idx+1}.</td><td style='border: 1px solid #000;'><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center; border: 1px solid #000;'>{item.get('hsn','')}</td><td style='text-align:center; border: 1px solid #000;'>{item.get('boxes','')}</td><td style='text-align:center; border: 1px solid #000;'>{qty_display}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['rate']):.3f}</td><td style='text-align:right; border: 1px solid #000;'>{float(item['amount']):.2f}</td></tr>"
-    
+
     tax_rows = ""
+    rowspan_val = 5
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
+        rowspan_val = 4
+    elif tax_type == "NONE":
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Tax (Nil / 0%)</td><td style='text-align:right; border: 1px solid #000;'>0.00</td></tr>"
+        rowspan_val = 4
     else:
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
-        
+        rowspan_val = 5
+
     eway_html = f"<tr><td style='border:none; padding:4px;'><strong>E-Way Bill No.</strong></td><td style='border:none; padding:4px;'>: <strong>{fd.get('eway_bill_no','')}</strong></td></tr>" if fd.get('eway_bill_no') else ""
 
     return f"""
@@ -376,7 +388,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
             </table>
             <table style="border-top: 2px solid #000; width: 100%; border-collapse: collapse; color:black;">
                 <tr>
-                    <td rowspan="5" style="width:60%; padding: 10px; border: 1px solid #000; vertical-align: top;">
+                    <td rowspan="{rowspan_val}" style="width:60%; padding: 10px; border: 1px solid #000; vertical-align: top;">
                         <strong>Total Invoice Amount in Words :</strong><br><span style="font-style: italic; font-size: 13px;">{amt_words}</span>
                     </td>
                     <td style="width:25%; text-align:right; font-weight:bold; padding: 4px; border: 1px solid #000;">Total Amount Before Tax</td><td style="width:15%; text-align:right; padding: 4px; border: 1px solid #000;">{total_before:.2f}</td>
@@ -389,7 +401,7 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
                 <div style="float: right; width: 40%; text-align: center;">
                     <span style="font-size: 10px;">Certified that the particulars given are true & correct</span><br>
                     <strong>For RAINBOW INDUSTRIES</strong>
-                    {get_signature_img()}
+                    {get_signature_img(include_sig)}
                     <span style="border-top: 1px solid #000; padding-top: 2px;">Authorised Signatory</span>
                 </div>
                 <div style="clear: both;"></div>
@@ -402,18 +414,18 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     </div>
     """
 
-def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title):
-    
+def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, copy_title, include_sig=True):
+
     has_item_code = any(str(item.get('item_code', '')).strip() for item in items)
     has_hsn = any(str(item.get('hsn', '')).strip() for item in items)
-    
+
     headers_html = """<th style="border: 1px solid #000; padding: 4px;">S.No.</th>"""
     if has_item_code:
         headers_html += """<th style="border: 1px solid #000; padding: 4px;">Item Code</th>"""
     headers_html += """<th style="border: 1px solid #000; padding: 4px; width: 35%;">Item Description</th>"""
     if has_hsn:
         headers_html += """<th style="border: 1px solid #000; padding: 4px;">Hsn Code</th>"""
-        
+
     headers_html += """
         <th style="border: 1px solid #000; padding: 4px;">Delivery<br>Date</th>
         <th style="border: 1px solid #000; padding: 4px;">Quantity</th>
@@ -426,31 +438,33 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
     for idx, item in enumerate(items):
         qty_val = float(item.get('qty', 0))
         qty_str = f"{qty_val:g}"
-        
+
         row = f"<tr><td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{idx+1}</td>"
-        
+
         if has_item_code:
             row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('item_code', '')}</td>"
-            
+
         row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:left;'>{item.get('desc', '').replace(chr(10), '<br>')}</td>"
-        
+
         if has_hsn:
             row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('hsn','')}</td>"
-            
+
         row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{fd.get('delivery_date','')}</td>"
         row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{qty_str}</td>"
         row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px;'>{item.get('unit', 'NOS')}</td>"
         row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item.get('rate', 0)):.4f}</td>"
         row += f"<td style='border: 1px solid #000; border-top:none; border-bottom:none; padding: 4px; text-align:right;'>{float(item.get('amount', 0)):.2f}</td></tr>"
-        
+
         items_html += row
-        
+
     colspan = 7
     if has_item_code: colspan += 1
     if has_hsn: colspan += 1
-    
+
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>IGST @18.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{igst:.2f}</td></tr>"
+    elif tax_type == "NONE":
+        tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>Tax (Nil / 0%)</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>0.00</td></tr>"
     else:
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>CGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{cgst:.2f}</td></tr><tr><td style='border-bottom: 1px solid #000; padding: 4px;'>SGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{sgst:.2f}</td></tr>"
 
@@ -485,7 +499,7 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                 </td>
             </tr>
         </table>
-        
+
         <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000; text-align: center;">
             <tr style="background-color: #f0f0f0;">
                 {headers_html}
@@ -493,7 +507,7 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
             {items_html}
             <tr><td colspan="{colspan}" style="border-left: 1px solid #000; border-right: 1px solid #000; height: 120px;"></td></tr>
         </table>
-        
+
         <table style="width: 100%; border-collapse: collapse; font-size: 11px; border: 1px solid #000; border-top: none;">
             <tr>
                 <td style="width: 60%; border-right: 1px solid #000; padding: 5px; vertical-align: top;">
@@ -515,7 +529,7 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                 </td>
             </tr>
         </table>
-        
+
         <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #000; border-top: none;">
             <tr>
                 <td style="width: 50%; border-right: 1px solid #000; padding: 5px; vertical-align: top;">
@@ -532,14 +546,14 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                 </td>
             </tr>
         </table>
-        
+
         <div style="border: 1px solid #000; border-top: none; padding: 5px; font-size: 10px; line-height: 1.4;">
             # It is mandatory to mention P.O numbers in all your Invoices/Challans.<br>
             # Kindly confirm receipt of order and confirm the delivery by E-Mail.<br>
             # All Rejections including in process and field returns to be replaced by you free of cost on immediate basis with all expenses to your account<br>
             # Warranty requirement: 12 months from receipt date against date against any manufacturing defect and functional failure.
         </div>
-        
+
         <div style="border: 1px solid #000; border-top: none; padding: 5px; height: 60px; position: relative;">
             <div style="position: absolute; right: 10px; top: 5px; font-size: 10px;"><strong>For {comp['name'].upper()}</strong></div>
             <div style="position: absolute; left: 10px; bottom: 5px; font-size: 10px; width: 100%;">
@@ -548,7 +562,7 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
                         <td style="border: none; text-align: left; padding-left: 20px;"><strong>(Prepared By)</strong></td>
                         <td style="border: none;"><strong>(HOD)</strong></td>
                         <td style="border: none; text-align: right; padding-right: 20px;">
-                            {get_signature_img_po()}
+                            {get_signature_img_po(include_sig)}
                             <strong>(Approved By)</strong>
                         </td>
                     </tr>
@@ -566,7 +580,7 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
         status = b['status']
         amt = float(b['amount'])
         color = "green" if status == "PAID" else "red"
-        
+
         rows_html += f"<tr>"
         rows_html += f"<td style='text-align:center; padding: 6px; border: 1px solid #ccc;'>{idx+1}</td>"
         rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{inv_date}</td>"
@@ -596,19 +610,19 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
         <h1>{comp['name'].upper()}</h1>
         <div class="header-info">{comp['address']}<br>GSTIN: {comp['gstin']} | Contact: {comp['contact']}</div>
         <div class="title">VENDOR LEDGER STATEMENT</div>
-        
+
         <div class="vendor-info">
             <strong>Vendor Name:</strong> {vendor_name}<br>
             <strong>Statement Generated On:</strong> {datetime.datetime.now().strftime('%d/%m/%Y %I:%M %p')}
         </div>
-        
+
         <table>
             <tr>
                 <th>S.No</th><th>Bill Date</th><th>Bill No.</th><th>PO / Ref</th><th>Amount (INR)</th><th>Status</th><th>Paid On</th>
             </tr>
             {rows_html}
         </table>
-        
+
         <div class="summary">
             <table>
                 <tr><th>Total Billed (Credit)</th><td style="text-align:right;">{total_billed:,.2f}</td></tr>
@@ -617,13 +631,13 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
             </table>
         </div>
         <div style="clear:both;"></div>
-        
+
         <div class="footer-sig">
             <strong>For {comp['name'].upper()}</strong>
-            <div style="text-align:center;">{get_signature_img()}</div>
+            <div style="text-align:center;">{get_signature_img(True)}</div>
             <div style="border-top:1px solid #000; padding-top:2px;">Authorized Signatory</div>
         </div>
-        
+
         <div style="clear:both;"></div>
         <div style="text-align:center; font-size: 9px; margin-top: 30px; color: #666;">
             ** This is a computer-generated statement **
@@ -633,7 +647,7 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
 
 def generate_remittance_pdf(comp, payment_data):
     amt_words = get_indian_currency_words(payment_data['amount'])
-    
+
     bank_n = payment_data.get('bank_name') if payment_data.get('bank_name') else "N/A"
     bank_a = payment_data.get('acc_no') if payment_data.get('acc_no') else "N/A"
     bank_i = payment_data.get('ifsc') if payment_data.get('ifsc') else "N/A"
@@ -657,11 +671,11 @@ def generate_remittance_pdf(comp, payment_data):
             {comp['name'].upper()}
         </div>
         <div style="clear: both; margin-bottom: 20px;"></div>
-        
+
         <div class="header-title">Payment Remittance Advice</div>
-        
+
         <div style="margin-bottom: 10px;">The following payment has been remitted.</div>
-        
+
         <table>
             <tr>
                 <td style="width: 25%;"><strong>Payment Reference Number</strong></td>
@@ -680,7 +694,7 @@ def generate_remittance_pdf(comp, payment_data):
                 <td>{float(payment_data['amount']):.2f}</td>
             </tr>
         </table>
-        
+
         <div style="font-weight: bold; margin-bottom: 5px;">Remittance Detail</div>
         <table>
             <tr>
@@ -705,13 +719,13 @@ def generate_remittance_pdf(comp, payment_data):
                 </td>
             </tr>
         </table>
-        
+
         <div style="float: left; width: 45%; border: 1px solid #ccc; padding: 10px;">
             <div style="font-weight: bold; margin-bottom: 5px;">To Payee</div>
             <strong>M/S {payment_data['vendor_name'].upper()}</strong><br>
             {payment_data.get('vendor_address', '')}
         </div>
-        
+
         <div style="float: right; width: 45%; border: 1px solid #ccc; padding: 10px;">
             <table>
                 <tr><td><strong>Bank Name</strong></td><td>{bank_n}</td></tr>
@@ -719,7 +733,7 @@ def generate_remittance_pdf(comp, payment_data):
                 <tr><td><strong>Bank IFSC Code</strong></td><td>{bank_i}</td></tr>
             </table>
         </div>
-        
+
         <div style="clear: both; margin-top: 20px; font-size: 10px; font-style: italic;">
             * Payments are subject to clearing in the Bank within 2-3 working days
         </div>
@@ -731,13 +745,13 @@ def generate_remittance_pdf(comp, payment_data):
 def send_remittance_email(vendor_email, vendor_name, pdf_bytes, my_company):
     SENDER_EMAIL = st.secrets.get("email", {}).get("address", "rainbowindustries647@gmail.com") 
     SENDER_PASSWORD = st.secrets.get("email", {}).get("app_password", "YOUR_APP_PASSWORD_HERE")
-    
+
     try:
         msg = MIMEMultipart()
         msg['From'] = f"{my_company['name']} <{SENDER_EMAIL}>"
         msg['To'] = vendor_email
         msg['Subject'] = f"Payment Remittance Advice from {my_company['name']}"
-        
+
         body = f"""Dear {vendor_name},
 
 Please find attached the Payment Remittance Advice against your recent invoice(s).
@@ -751,11 +765,11 @@ Regards,
 {my_company.get('contact', '')}
 """
         msg.attach(MIMEText(body, 'plain'))
-        
+
         part = MIMEApplication(pdf_bytes, Name="Payment_Remittance_Advice.pdf")
         part['Content-Disposition'] = 'attachment; filename="Payment_Remittance_Advice.pdf"'
         msg.attach(part)
-        
+
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -796,14 +810,14 @@ else:
     safe_name = st.session_state.auth_name
     uid = st.session_state.auth_uid
     my_company = get_company_profile(uid)
-    
+
     st.sidebar.title("☁️ ERP System")
     st.sidebar.write(f"**User:** {safe_name}")
     if st.sidebar.button("🔒 Sign Out"):
         for k in list(st.session_state.keys()):
             if k not in ["cookie_manager"]: st.session_state.pop(k, None)
         cookie_manager.delete("rainbow_erp_auth"); time.sleep(0.5); st.rerun()
-    
+
     if "redirect_menu" in st.session_state:
         st.session_state.cust_menu = st.session_state.redirect_menu
         del st.session_state.redirect_menu
@@ -814,7 +828,7 @@ else:
         total_clients = sum(1 for u in all_users if u['role'] == 'customer')
         m1, m2 = st.columns(2); m1.metric("Active Tenants", str(total_clients)); m2.metric("Monthly Revenue", f"₹{total_clients * 2499}")
         st.markdown("---")
-        
+
         with st.expander("🚨 FACTORY RESET (DANGER ZONE)", expanded=False):
             st.error("⚠️ WARNING: This will permanently delete ALL Clients, Items, Invoices, and Challans from the Database. The system will become completely fresh, ready for a new owner. Only the SuperAdmin login will remain.")
             if st.button("🧨 Wipe Database & Factory Reset", type="primary", use_container_width=True):
@@ -833,9 +847,9 @@ else:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error executing reset: {e}")
-        
+
         st.markdown("---")
-        
+
         with st.form("create_user_form", clear_on_submit=True):
             new_uid = st.text_input("Username / Login ID")
             new_pass = st.text_input("Password", type="password")
@@ -844,14 +858,14 @@ else:
             if st.form_submit_button("🚀 Deploy Account"):
                 if execute_data("INSERT INTO users (uid, password, role, name) VALUES (%s, %s, %s, %s)", (new_uid, new_pass, new_role_select, new_fullname)):
                     st.success("Account successfully created!"); time.sleep(0.5); st.rerun()
-                    
+
         st.subheader("👥 User Database")
         st.dataframe(pd.DataFrame(all_users), width="stretch")
-        
+
         st.markdown("---")
         st.subheader("🗑️ Delete Client Account")
         customer_users = [u for u in all_users if u['role'].lower() == 'customer']
-        
+
         if customer_users:
             with st.form("delete_user_form"):
                 del_uid = st.selectbox("Select Client to Delete permanently", [f"{u['name']} (ID: {u['uid']})" for u in customer_users])
@@ -861,7 +875,7 @@ else:
                         selected_user = next(u for u in customer_users if f"{u['name']} (ID: {u['uid']})" == del_uid)
                         t_uid = selected_user['uid']
                         t_name = selected_user['name']
-                        
+
                         try:
                             execute_data("DELETE FROM users WHERE uid=%s", (t_uid,))
                             execute_data("DELETE FROM company_profiles WHERE uid=%s", (t_uid,))
@@ -872,7 +886,7 @@ else:
                             execute_data("DELETE FROM purchase_orders WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM purchase_invoices WHERE created_by=%s", (t_name,))
                             execute_data("DELETE FROM inward_challans WHERE created_by=%s", (t_name,))
-                            
+
                             st.success(f"✅ Client '{t_name}' and their entire dataset has been wiped!")
                             time.sleep(1.5)
                             st.rerun()
@@ -882,7 +896,7 @@ else:
                         st.error("⚠️ Please check the confirmation box to proceed with deletion.")
         else:
             st.info("No active clients available to delete.")
-    
+
     elif role == "CUSTOMER":
         menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "📥 Purchase & Payables", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
@@ -890,9 +904,9 @@ else:
             st.title("🏢 Partner Dashboard")
             st.write("Manage your registered vendors and clients here. Generate specific Invoices, Challans, or POs with a single click.")
             st.markdown("---")
-            
+
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
-            
+
             if not parties_db:
                 st.info("No business partners found. Please navigate to 'Add Master Data' to register your first partner.")
             else:
@@ -901,13 +915,13 @@ else:
                     with cols[idx % 3]:
                         st.markdown(f"#### 🏢 {p['party_name']}")
                         st.caption(f"**State:** {p['state']} | **GST:** {p['gstin']}")
-                        
+
                         c_inv, c_chal, c_po = st.columns(3)
                         if c_inv.button("📄 Inv", key=f"d_inv_{p['id']}", use_container_width=True):
                             st.session_state['sel_inv_p'] = p['party_name']
                             st.session_state.redirect_menu = "📄 Tax Invoice"
                             st.rerun()
-                            
+
                         if c_chal.button("📝 Chal", key=f"d_chal_{p['id']}", use_container_width=True):
                             st.session_state['sel_chal_p'] = p['party_name']
                             st.session_state.redirect_menu = "📝 Delivery Challan"
@@ -917,34 +931,34 @@ else:
                             st.session_state['sel_po_p'] = p['party_name']
                             st.session_state.redirect_menu = "🛒 Purchase Order"
                             st.rerun()
-                            
+
                         if st.button("🗑️ Remove Partner", key=f"d_del_{p['id']}", use_container_width=True):
                             execute_data("DELETE FROM party_master WHERE id=%s", (p['id'],))
                             execute_data("DELETE FROM item_master WHERE party_name=%s AND uid=%s", (p['party_name'], uid)) 
                             st.rerun()
-                        
+
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
         elif menu == "📥 Purchase & Payables":
             st.title("📥 Purchase Management & Payables")
             st.write("Track incoming Vendor Challans (GRN), Bills, and automatically calculate Due Dates.")
-            
+
             tab_inward, tab_add_bill, tab_pending, tab_paid = st.tabs([
                 "📦 1. Inward Vendor Challan", 
                 "🧾 2. Convert / Add Bill", 
                 "⏳ 3. Pending Payments", 
                 "✅ 4. Paid History"
             ])
-            
+
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
             party_names = [p['party_name'] for p in parties_db]
-            
+
             all_pos = fetch_data("SELECT po_no FROM purchase_orders WHERE is_deleted=0 ORDER BY id DESC")
             po_dropdown_list = ["-- Direct Bill (No PO) --"] + [p['po_no'] for p in all_pos]
-            
+
             with tab_inward:
                 st.markdown("### Record Material Received on Vendor Challan")
-                
+
                 pend_chal = fetch_data("SELECT * FROM inward_challans WHERE created_by=%s AND status='UNBILLED' AND is_deleted=0 ORDER BY id DESC", (safe_name,))
                 if pend_chal:
                     with st.expander("👀 View Pending (Unbilled) Vendor Challans", expanded=False):
@@ -954,7 +968,7 @@ else:
                             if col_c2.button("🗑️ Delete", key=f"del_ic_{pc['id']}", use_container_width=True):
                                 execute_data("UPDATE inward_challans SET is_deleted=1 WHERE id=%s", (pc['id'],))
                                 st.rerun()
-                
+
                 with st.form("add_inward_challan", clear_on_submit=True):
                     c1, c2 = st.columns(2)
                     v_name_c = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names, key="v_chal")
@@ -983,7 +997,7 @@ else:
                         pend_chal_db = fetch_data("SELECT * FROM inward_challans WHERE created_by=%s AND status='UNBILLED' AND is_deleted=0", (safe_name,))
                         pend_chal_opts = ["-- Select Unbilled Challan --"] + [f"{c['vendor_name']} | Challan: {c['challan_no']} | ₹{c.get('amount',0.0)}" for c in pend_chal_db]
                         sel_chal_str = st.selectbox("Select Pending Vendor Challan *", pend_chal_opts)
-                        
+
                         inv_no = st.text_input("Vendor Bill / Invoice No. *", key="ib1")
                         c3, c5, c6 = st.columns(3)
                         inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id1")
@@ -994,13 +1008,13 @@ else:
                             if sel_chal_str != "-- Select Unbilled Challan --" and inv_no and amt > 0:
                                 v_n = sel_chal_str.split(" | Challan: ")[0]
                                 c_n = sel_chal_str.split(" | Challan: ")[1].split(" | ₹")[0]
-                                
+
                                 chal_rec = fetch_data("SELECT challan_date, po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
                                 po_val = chal_rec[0]['po_ref'] if chal_rec else ""
-                                
+
                                 ch_date_obj = chal_rec[0]['challan_date'] if isinstance(chal_rec[0]['challan_date'], datetime.date) else datetime.datetime.strptime(str(chal_rec[0]['challan_date']), '%Y-%m-%d').date()
                                 due_d = ch_date_obj + datetime.timedelta(days=credit_days)
-                                
+
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_n, inv_no, inv_date.strftime('%Y-%m-%d'), f"PO: {po_val} | Chal: {c_n}", amt, due_d.strftime('%Y-%m-%d')))
                                 execute_data("UPDATE inward_challans SET status='BILLED' WHERE vendor_name=%s AND challan_no=%s AND created_by=%s", (v_n, c_n, safe_name))
 
@@ -1014,13 +1028,13 @@ else:
                         c1, c2 = st.columns(2)
                         v_name = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names)
                         inv_no = c2.text_input("Vendor Bill / Invoice No. *", key="ib2")
-                        
+
                         c3, c4, c5, c6 = st.columns(4)
                         inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id2")
                         po_ref = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list)
                         amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia2")
                         credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1, key="ic2")
-                        
+
                         if st.form_submit_button("💾 Save Direct Bill"):
                             if v_name != "-- Select Vendor --" and inv_no and amt > 0:
                                 po_val = "" if po_ref == "-- Direct Bill (No PO) --" else po_ref
@@ -1031,43 +1045,43 @@ else:
                                 st.rerun()
                             else:
                                 st.error("⚠️ Please select a Vendor and fill Bill No. and Amount.")
-                            
+
             with tab_pending:
                 all_vendor_invoices = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND is_deleted=0 ORDER BY due_date ASC", (safe_name,))
-                
+
                 if all_vendor_invoices:
                     st.markdown("### 🚨 Outstanding Vendor Dues & Ledger")
-                    
+
                     vendor_ledger = {}
                     for p in all_vendor_invoices:
                         v_name = p['vendor_name']
                         if v_name not in vendor_ledger:
                             vendor_ledger[v_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": [], "all_bills": []}
-                        
+
                         amt = float(p['amount'])
                         vendor_ledger[v_name]["total_billed"] += amt
                         vendor_ledger[v_name]["all_bills"].append(p)
-                        
+
                         if p['status'] == 'PAID':
                             vendor_ledger[v_name]["total_paid"] += amt
                         else:
                             vendor_ledger[v_name]["pending_bills"].append(p)
-                    
+
                     pending_vendors = {k: v for k, v in vendor_ledger.items() if len(v["pending_bills"]) > 0}
-                    
+
                     if pending_vendors:
                         for v_name, data in pending_vendors.items():
                             balance = data["total_billed"] - data["total_paid"]
-                            
+
                             with st.expander(f"🏢 {v_name} | Pending Balance: ₹ {balance:,.2f}"):
                                 c1, c2, c3 = st.columns(3)
                                 c1.metric("Credit (Total Billed)", f"₹ {data['total_billed']:,.2f}")
                                 c2.metric("Debit (Total Paid)", f"₹ {data['total_paid']:,.2f}")
                                 c3.metric("Current Balance", f"₹ {balance:,.2f}")
-                                
+
                                 stmt_html = generate_vendor_statement_html(my_company, v_name, data['all_bills'], data['total_billed'], data['total_paid'], balance)
                                 stmt_pdf = HTML(string=stmt_html).write_pdf()
-                                
+
                                 st.download_button(
                                     label="📄 Download Vendor Ledger Statement (PDF)",
                                     data=stmt_pdf,
@@ -1077,16 +1091,16 @@ else:
                                     type="primary"
                                 )
                                 st.markdown("---")
-                                
+
                                 st.markdown("#### ⏳ Pending Invoices for this Vendor")
                                 for p in data["pending_bills"]:
                                     due_obj = p['due_date'] if isinstance(p['due_date'], datetime.date) else datetime.datetime.strptime(p['due_date'], '%Y-%m-%d').date()
                                     inv_obj = p['invoice_date'] if isinstance(p['invoice_date'], datetime.date) else datetime.datetime.strptime(p['invoice_date'], '%Y-%m-%d').date()
                                     days_left = (due_obj - datetime.date.today()).days
-                                    
+
                                     box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
                                     status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
-                                    
+
                                     st.markdown(f"""
                                     <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1104,14 +1118,14 @@ else:
                                         </div>
                                     </div>
                                     """, unsafe_allow_html=True)
-                                    
+
                                     c_pay, c_del = st.columns([3, 1])
                                     with c_pay:
                                         if st.button("✅ Mark Payment as Cleared", key=f"pay_{p['id']}", use_container_width=True):
-                                            
+
                                             # FETCH VENDOR BANK DETAILS FROM MASTER DATA
                                             v_details = get_vendor_bank_details(v_name, uid)
-                                            
+
                                             payment_data = {
                                                 'vendor_name': v_name,
                                                 'pay_date': datetime.date.today().strftime('%d-%b-%y').upper(),
@@ -1126,21 +1140,21 @@ else:
                                             pdf_bytes = generate_remittance_pdf(my_company, payment_data)
                                             st.session_state[f'remittance_pdf_{p["id"]}'] = pdf_bytes
                                             st.session_state[f'vemail_default_{p["id"]}'] = v_details['email']
-                                            
+
                                     with c_del:
                                         if st.button("🗑️ Delete Bill", key=f"del_pen_{p['id']}", use_container_width=True):
                                             execute_data("UPDATE purchase_invoices SET is_deleted=1 WHERE id=%s", (p['id'],))
                                             st.rerun()
-                                            
+
                                     if st.session_state.get(f'remittance_pdf_{p["id"]}'):
                                         st.markdown("<div style='background-color:#e8f5e9; padding:15px; border-radius:8px; border: 1px solid #c8e6c9; margin-top:10px;'>", unsafe_allow_html=True)
                                         st.markdown("#### 🧾 Generate Payment Remittance Advice")
                                         st.info("Bank details automatically fetched from Master Data.")
                                         ve = st.text_input("Vendor Email Address:", value=st.session_state.get(f'vemail_default_{p["id"]}', ""), key=f"vemail_{p['id']}")
-                                        
+
                                         col_d, col_s, col_f = st.columns(3)
                                         col_d.download_button("📄 Download PDF", st.session_state[f'remittance_pdf_{p["id"]}'], file_name=f"Remittance_{v_name}.pdf", mime="application/pdf", key=f"dl_rem_{p['id']}", use_container_width=True)
-                                        
+
                                         if col_s.button("📧 Send Email & Clear", key=f"smail_{p['id']}", type="primary", use_container_width=True):
                                             with st.spinner("Sending email..."):
                                                 success, msg = send_remittance_email(ve, v_name, st.session_state[f'remittance_pdf_{p["id"]}'], my_company)
@@ -1152,7 +1166,7 @@ else:
                                                 st.rerun()
                                             else:
                                                 st.error(f"Failed to send email: {msg}")
-                                                
+
                                         if col_f.button("⏭️ Skip Email & Clear", key=f"skip_{p['id']}", use_container_width=True):
                                             execute_data("UPDATE purchase_invoices SET status='PAID', paid_date=%s WHERE id=%s", (datetime.date.today().strftime('%Y-%m-%d'), p['id']))
                                             st.success("✅ Payment Cleared without Email!")
@@ -1165,12 +1179,12 @@ else:
                         st.info("No pending payments! You are all clear. 🎉")
                 else:
                     st.info("No purchase bills found yet. 🎉")
-                    
+
             with tab_paid:
                 paid_data = fetch_data("SELECT * FROM purchase_invoices WHERE created_by=%s AND status='PAID' AND is_deleted=0 ORDER BY paid_date DESC LIMIT 50", (safe_name,))
                 if paid_data:
                     st.markdown("### ✅ Recently Cleared Invoices")
-                    
+
                     st.markdown("**Vendor & Invoice Details**")
                     for p in paid_data:
                         c1, c2, c3, c4, c5 = st.columns([2.5, 2.5, 2, 2, 1])
@@ -1188,19 +1202,19 @@ else:
         elif menu == "⚙️ Company Profile":
             st.title("⚙️ Global Profile Configuration")
             st.write("Configure your exact organizational details here to ensure professional formatting on all commercial documents.")
-            
+
             c_name = st.text_input("Company/Factory Name *", value=my_company["name"], key="c_name")
             c_tagline = st.text_input("Tagline (e.g., An ISO 9001:2015 Certified)", value=my_company.get("tagline", ""), key="c_tagline")
             c_gst = st.text_input("GSTIN Number *", value=my_company["gstin"], key="c_gst")
             c_address = st.text_area("Registered Address *", value=my_company["address"], key="c_address")
-            
+
             col_1, col_2 = st.columns(2)
             with col_1: c_state = st.text_input("State *", value=my_company["state"], key="c_state")
             with col_2: c_scode = st.text_input("State Code *", value=my_company["state_code"], key="c_scode")
-            
+
             c_contact = st.text_input("Contact Lines *", value=my_company.get("contact", ""), key="c_contact")
             c_manu = st.text_input("Business Scope *", value=my_company.get("manufacturing", ""), key="c_manu")
-            
+
             st.markdown("---")
             st.subheader("🏦 Your Company Bank Details (Not for Remittance)")
             st.info("These are YOUR bank details (Optional - For future feature integration).")
@@ -1212,15 +1226,15 @@ else:
             if st.button("💾 Update Configuration", type="primary"):
                 execute_data("INSERT INTO company_profiles (uid, name, gstin, address, state, state_code, tagline, contact, manufacturing, bank_name, bank_acc, bank_ifsc) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=%s, gstin=%s, address=%s, state=%s, state_code=%s, tagline=%s, contact=%s, manufacturing=%s, bank_name=%s, bank_acc=%s, bank_ifsc=%s", (uid, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_bank_name, c_bank_acc, c_bank_ifsc, c_name, c_gst, c_address, c_state, c_scode, c_tagline, c_contact, c_manu, c_bank_name, c_bank_acc, c_bank_ifsc))
                 st.success("Configuration synchronized successfully."); time.sleep(0.5); st.rerun()
-            
+
         elif menu == "📦 Add Master Data":
             st.title("📦 Master Data Management")
-            
+
             c1, c2 = st.columns(2)
             with c1:
                 st.subheader("👥 Manage Customers / Vendors")
                 tab_add, tab_edit = st.tabs(["➕ Register New", "✏️ Edit Existing"])
-                
+
                 with tab_add:
                     with st.form("p_m", clear_on_submit=True):
                         st.markdown("**Basic Details:**")
@@ -1230,13 +1244,13 @@ else:
                         ps = st.text_input("State *")
                         pc = st.text_input("State Code *")
                         ppos = st.text_input("Place of Supply (City/State) *")
-                        
+
                         st.markdown("**Contact & Bank Details (For Remittance Advice):**")
                         p_email = st.text_input("Email Address")
                         p_bname = st.text_input("Bank Name (e.g. Bank of India)")
                         p_bacc = st.text_input("Account Number")
                         p_bifsc = st.text_input("IFSC Code")
-                        
+
                         if st.form_submit_button("Save Partner"):
                             if pn and pa and pg and ps and pc:
                                 execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply, email, bank_name, bank_acc, bank_ifsc) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos, p_email, p_bname, p_bacc, p_bifsc))
@@ -1244,7 +1258,7 @@ else:
                                 time.sleep(1)
                                 st.rerun()
                             else: st.error("Please complete all mandatory fields marked with (*).")
-                            
+
                 with tab_edit:
                     saved_parties_full = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
                     if not saved_parties_full:
@@ -1253,7 +1267,7 @@ else:
                         party_names = {p['party_name']: p for p in saved_parties_full}
                         sel_edit_p = st.selectbox("Select Partner to Edit", list(party_names.keys()))
                         sel_p_data = party_names[sel_edit_p]
-                        
+
                         with st.form("p_edit_m"):
                             st.markdown("**Basic Details:**")
                             epn = st.text_input("Partner Name *", value=sel_p_data['party_name'])
@@ -1262,13 +1276,13 @@ else:
                             eps = st.text_input("State *", value=sel_p_data['state'])
                             epc = st.text_input("State Code *", value=sel_p_data['state_code'])
                             eppos = st.text_input("Place of Supply (City/State) *", value=sel_p_data.get('place_of_supply', ''))
-                            
+
                             st.markdown("**Contact & Bank Details:**")
                             epemail = st.text_input("Email Address", value=sel_p_data.get('email', ''))
                             epbname = st.text_input("Bank Name", value=sel_p_data.get('bank_name', ''))
                             epbacc = st.text_input("Account Number", value=sel_p_data.get('bank_acc', ''))
                             epbifsc = st.text_input("IFSC Code", value=sel_p_data.get('bank_ifsc', ''))
-                            
+
                             if st.form_submit_button("💾 Update Partner Details"):
                                 if epn and epa and epg and eps and epc:
                                     old_name = sel_p_data['party_name']
@@ -1285,7 +1299,7 @@ else:
             with c2:
                 st.subheader("📦 Map Materials / PO Items")
                 saved_parties = [p['party_name'] for p in fetch_data("SELECT party_name FROM party_master WHERE uid=%s", (uid,))]
-                
+
                 if not saved_parties:
                     st.warning("⚠️ Please register a Business Partner on the left before mapping items.")
                 else:
@@ -1294,16 +1308,16 @@ else:
                         idsc = st.text_input("Item Description *")
                         ihsn = st.text_input("HSN Code *")
                         irate = st.number_input("Standard Rate (INR) *", min_value=0.0, step=1.0)
-                        
+
                         if st.form_submit_button("Save Item Map"):
                             if idsc and ihsn:
                                 execute_data("INSERT INTO item_master (uid, party_name, item_description, hsn_code, rate) VALUES (%s, %s, %s, %s, %s)", (uid, linked_party, idsc, ihsn, irate))
                                 st.success(f"Material record successfully mapped to {linked_party}.")
                             else: st.error("Item Description and HSN Code are mandatory.")
-                
+
                 saved_items = fetch_data("SELECT id, party_name, item_description, hsn_code, rate FROM item_master WHERE uid=%s", (uid,))
                 if saved_items:
-                    with st.expander("🗑️️ View / Purge Mapped Items"):
+                    with st.expander("🗑 View / Purge Mapped Items"):
                         for itm in saved_items:
                             col_a, col_b = st.columns([4, 1])
                             col_a.write(f"**{itm['party_name']}** ➔ {itm['item_description']} (HSN: {itm['hsn_code']} | Rate: ₹{itm.get('rate', 0.0)})")
@@ -1324,7 +1338,7 @@ else:
             else:
                 if "gemini_api_key" not in st.session_state:
                     st.session_state.gemini_api_key = ""
-                
+
                 if not st.session_state.gemini_api_key:
                     st.info("💡 A valid Google Gemini API Key is required to initialize the neural link.")
                     api_input = st.text_input("Enter Execution Key:", type="password")
@@ -1334,7 +1348,7 @@ else:
                 else:
                     try:
                         genai.configure(api_key=st.session_state.gemini_api_key)
-                        
+
                         sys_prompt = """You are 'Rainbow AI', an intelligent assistant for Rainbow ERP.
                         Your objective is to guide users on how to operate the ERP system.
                         CRITICAL INSTRUCTION: You are capable of understanding and communicating in ANY language the user prefers (including Hinglish, Hindi, English, etc.). Adapt your language to match the user's prompt perfectly while keeping the tone professional. Use bullet points and appropriate emojis. Do not output raw code."""
@@ -1350,19 +1364,19 @@ else:
                                 st.markdown(msg["parts"][0])
 
                         prompt = st.chat_input("Input query... (e.g., 'How do I generate an invoice?')")
-                        
+
                         if prompt:
                             st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
                             with st.chat_message("user"):
                                 st.markdown(prompt)
-                                
+
                             with st.chat_message("assistant"):
                                 with st.spinner("Processing query..."):
                                     chat = model.start_chat(history=st.session_state.chat_history[:-1])
                                     response = chat.send_message(prompt)
                                     st.markdown(response.text)
                                     st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
-                                    
+
                         if st.button("🗑️ Wipe Memory"):
                             st.session_state.chat_history = []
                             st.rerun()
@@ -1376,7 +1390,7 @@ else:
         elif menu == "📜 Analytics History":
             st.title("📜 Document Ledger & Analytics")
             view_type = st.radio("Select View Category:", ["Delivery Challans", "Tax Invoices", "Purchase Orders"], horizontal=True)
-            
+
             if view_type == "Delivery Challans":
                 party_list = fetch_data("SELECT DISTINCT party_name FROM challans WHERE created_by = %s AND is_deleted = 0", (safe_name,))
                 p_names = ["All Partners"] + [p['party_name'] for p in party_list]
@@ -1386,17 +1400,17 @@ else:
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, challan_date, challan_no, party_name, amount FROM challans WHERE created_by = %s AND party_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
-                
+
                 if data:
                     df = pd.DataFrame(data)
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['challan_date'], format='%d/%m/%Y', errors='coerce')
-                    
+
                     st.markdown(f"### 📈 Node Analytics: {sel_history_p}")
                     c1, c2 = st.columns(2)
                     c1.metric("🧾 Total Documents Issued", f"{len(df)}")
                     c2.metric("💰 Cumulative Value", f"₹ {df['clean_amt'].sum():,.2f}")
-                    
+
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
                         valid_dates['month_str'] = valid_dates['date_obj'].dt.strftime('%b %Y')
@@ -1404,7 +1418,7 @@ else:
                         grouped = valid_dates.groupby(['sort_key', 'month_str'])['clean_amt'].sum().reset_index().sort_values('sort_key')
                         chart_data = grouped.set_index('month_str')['clean_amt']
                         st.bar_chart(chart_data)
-                    
+
                     st.markdown("---")
                     st.write("**Recent Document Ledger:**")
 
@@ -1426,17 +1440,17 @@ else:
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, invoice_date, invoice_no, bill_to_name, amount FROM tax_invoices WHERE created_by = %s AND bill_to_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
-                
+
                 if data:
                     df = pd.DataFrame(data)
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['invoice_date'], format='%d/%m/%Y', errors='coerce')
-                    
+
                     st.markdown(f"### 📈 Node Analytics: {sel_history_p}")
                     c1, c2 = st.columns(2)
                     c1.metric("🧾 Total Documents Issued", f"{len(df)}")
                     c2.metric("💰 Cumulative Value", f"₹ {df['clean_amt'].sum():,.2f}")
-                    
+
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
                         valid_dates['month_str'] = valid_dates['date_obj'].dt.strftime('%b %Y')
@@ -1444,7 +1458,7 @@ else:
                         grouped = valid_dates.groupby(['sort_key', 'month_str'])['clean_amt'].sum().reset_index().sort_values('sort_key')
                         chart_data = grouped.set_index('month_str')['clean_amt']
                         st.bar_chart(chart_data)
-                        
+
                     st.markdown("---")
                     st.write("**Recent Document Ledger:**")
 
@@ -1455,7 +1469,7 @@ else:
                         if c5_edit.button("✏️", key=f"ei_{c['id']}"):
                             fd = fetch_data("SELECT * FROM tax_invoices WHERE id=%s", (c['id'],))[0]
                             st.session_state.update({"form_data": fd, "form_items": json.loads(fd['items_data']), "mode": "UPDATE", "redirect_menu": "📄 Tax Invoice"}); st.rerun()
-                        if c5_del.button("🗑️️", key=f"di_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
+                        if c5_del.button("🗑", key=f"di_{c['id']}"): execute_data("UPDATE tax_invoices SET is_deleted = 1, deleted_at = NOW() WHERE id = %s", (c['id'],)); st.rerun()
                 else: st.info("No active logs found for these parameters.")
             else:
                 party_list = fetch_data("SELECT DISTINCT vendor_name FROM purchase_orders WHERE created_by = %s AND is_deleted = 0", (safe_name,))
@@ -1466,17 +1480,17 @@ else:
                     data = fetch_data("SELECT id, po_date, po_no, vendor_name, amount FROM purchase_orders WHERE created_by = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name,))
                 else:
                     data = fetch_data("SELECT id, po_date, po_no, vendor_name, amount FROM purchase_orders WHERE created_by = %s AND vendor_name = %s AND is_deleted = 0 ORDER BY id DESC", (safe_name, sel_history_p))
-                
+
                 if data:
                     df = pd.DataFrame(data)
                     df['clean_amt'] = df['amount'].apply(lambda x: float(str(x).replace('₹','').replace(',','').strip()) if x else 0.0)
                     df['date_obj'] = pd.to_datetime(df['po_date'], format='%d/%m/%Y', errors='coerce')
-                    
+
                     st.markdown(f"### 📈 Node Analytics: {sel_history_p}")
                     c1, c2 = st.columns(2)
                     c1.metric("🧾 Total POs Issued", f"{len(df)}")
                     c2.metric("💰 Cumulative Value", f"₹ {df['clean_amt'].sum():,.2f}")
-                    
+
                     valid_dates = df.dropna(subset=['date_obj']).copy()
                     if not valid_dates.empty:
                         valid_dates['month_str'] = valid_dates['date_obj'].dt.strftime('%b %Y')
@@ -1484,7 +1498,7 @@ else:
                         grouped = valid_dates.groupby(['sort_key', 'month_str'])['clean_amt'].sum().reset_index().sort_values('sort_key')
                         chart_data = grouped.set_index('month_str')['clean_amt']
                         st.bar_chart(chart_data)
-                        
+
                     st.markdown("---")
                     st.write("**Recent Document Ledger:**")
 
@@ -1501,7 +1515,7 @@ else:
         elif menu == "🗑️ Recycle Bin":
             st.title("🗑️ Security Archive")
             view_type = st.radio("Select Archive View:", ["Delivery Challans", "Tax Invoices", "Purchase Orders"], horizontal=True)
-            
+
             if view_type == "Delivery Challans":
                 data = fetch_data("SELECT id, challan_no, party_name, amount FROM challans WHERE created_by = %s AND is_deleted = 1", (safe_name,))
                 if data:
@@ -1548,7 +1562,7 @@ else:
         elif menu == "🛒 Purchase Order":
             st.title("🛒 Purchase Order Generator")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
-            
+
             if st.button("🔄 Clear Document Matrix", key="c_po_btn"):
                 preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
@@ -1560,15 +1574,15 @@ else:
             if mode == "UPDATE": st.warning("⚠️ Modifying active document record.")
 
             auto_po = get_next_auto_no('purchase_orders', 'po_no', safe_name)
-            
+
             if auto_po == "1" or auto_po.startswith("RI-"):
                 now = datetime.datetime.now()
                 yr = now.year
                 fy = f"{yr-1}-{str(yr)[-2:]}" if now.month < 4 else f"{yr}-{str(yr+1)[-2:]}"
                 auto_po = f"RI/{fy}/101"
-                
+
             def_po_no = fd.get('po_no', auto_po) if mode == "INSERT" else fd.get('po_no','')
-            
+
             dash_party = st.session_state.pop('sel_po_p', None)
             party_names = ["-- Select Business Partner --"] + [p['party_name'] for p in parties_db]
             default_idx = party_names.index(dash_party) if dash_party in party_names else 0
@@ -1589,17 +1603,17 @@ else:
 
             with st.expander("🏢 Vendor Information (TO)", expanded=True):
                 st.markdown("**Select Vendor (Who is supplying the goods):**")
-                
+
                 unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
                 p_names_list = ["-- Select Business Partner --"] + unique_parties
-                
+
                 sel_company = st.selectbox("1. Select Vendor Company", p_names_list, key="sel_company_po")
-                
+
                 if sel_company != "-- Select Business Partner --":
                     company_records = [p for p in parties_db if p['party_name'] == sel_company]
                     address_options = [p['address'] for p in company_records]
                     sel_address = st.selectbox("2. Select Branch Address", address_options, key="sel_address_po")
-                    
+
                     pm = next((p for p in company_records if p['address'] == sel_address), None)
                     if pm:
                         st.session_state.v_name = pm['party_name']
@@ -1609,7 +1623,7 @@ else:
                         st.session_state.v_scode = pm['state_code']
                 else:
                     for k in ['v_name', 'v_add', 'v_gst', 'v_state', 'v_scode']: st.session_state[k] = ""
-                    
+
                 v_name = st.text_input("Vendor Name *", key="v_name")
                 v_add = st.text_area("Registered Address *", key="v_add", height=68)
                 v_gst = st.text_input("GSTIN Reference *", key="v_gst")
@@ -1620,7 +1634,7 @@ else:
             st.subheader("📦 Order Line Items")
             items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, v_name)) if v_name else []
             item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
-            
+
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
             if col_btn1.button("➕ Insert Blank Row", key="add_po_item"): st.session_state.item_count += 1; st.rerun()
             if col_btn2.button("➖ Remove Bottom Row", key="rem_po_item") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
@@ -1638,7 +1652,7 @@ else:
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item Sequence {i+1}**")
-                
+
                 if f"po_desc_{i}" not in st.session_state:
                     st.session_state[f"po_code_{i}"] = ex.get('item_code', '')
                     st.session_state[f"po_desc_{i}"] = ex.get('desc', '')
@@ -1648,7 +1662,7 @@ else:
                     st.session_state[f"po_rate_{i}"] = float(ex.get('rate', 0.0))
 
                 sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_po_widget_{i}", on_change=autofill_po_item, args=(i, items_db))
-                
+
                 c_code, c1, c2, c4, c_unit, c5 = st.columns([1.5, 3.0, 1.5, 1.0, 1.0, 1.5])
                 with c_code: item_code = st.text_input("Item Code (Opt)", key=f"po_code_{i}")
                 with c1: desc = st.text_input("Material Description *", key=f"po_desc_{i}")
@@ -1656,19 +1670,25 @@ else:
                 with c4: qty = st.number_input("Qty *", min_value=0.0, format="%.3f", key=f"po_qty_{i}")
                 with c_unit: unit = st.selectbox("Unit", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"po_unit_{i}")
                 with c5: rate = st.number_input("Rate (₹) *", min_value=0.0, format="%.3f", key=f"po_rate_{i}")
-                
+
                 amount = round(qty * rate, 2)
                 items_data.append({"item_code": item_code, "desc": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
 
-            tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True, key="po_tax")
-            tax_mode = "IGST" if "IGST" in tax_type else "CGST"
+            # TAX & SIGNATURE OPTIONS FOR PO
+            po_tax_idx = 0
+            if fd.get('tax_type') == "IGST": po_tax_idx = 1
+            elif fd.get('tax_type') == "NONE": po_tax_idx = 2
+
+            tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)", "No Tax / Nil (0%)"], index=po_tax_idx, horizontal=True, key="po_tax")
+            tax_mode = "IGST" if "IGST" in tax_type else ("NONE" if "No Tax" in tax_type else "CGST")
+            include_sig_po = st.checkbox("✍️ Include Digital Signature on Document", value=True, key="sig_po")
 
             if 'pdf_po' in st.session_state:
                 st.success("✅ Purchase Order Successfully Generated.")
                 c_dl, c_wa = st.columns([2, 2])
                 c_dl.download_button("📄 Export PO Document", data=st.session_state['pdf_po'], file_name=f"PurchaseOrder_{st.session_state['po_no_disp'].replace('/','_')}.pdf", mime="application/pdf", type="primary")
-                
+
                 wa_msg = f"Hello {st.session_state.get('v_name', 'Vendor')},%0A%0APlease find attached our Purchase Order from *{my_company['name']}*:%0A*PO No:* {st.session_state['po_no_disp']}%0A*Total Amount:* {st.session_state.get('po_amt', '')}%0A%0AKindly process the order at the earliest."
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
@@ -1680,10 +1700,10 @@ else:
                     igst = round(total_before * 0.18, 2) if tax_mode == "IGST" else 0.0
                     total_tax = round(cgst + sgst + igst, 2)
                     total_after = round(total_before + total_tax, 2)
-                    
+
                     amt_words = get_indian_currency_words(total_after)
                     items_json = json.dumps(items_data)
-                    
+
                     del_date_str = delivery_date.strftime('%d/%m/%Y')
 
                     current_fd = {
@@ -1695,14 +1715,14 @@ else:
                     else: execute_data("""UPDATE purchase_orders SET po_date=%s, po_no=%s, vendor_name=%s, vendor_address=%s, vendor_gstin=%s, vendor_state=%s, vendor_state_code=%s, delivery_date=%s, payment_terms=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (po_date.strftime('%d/%m/%Y'), po_no, v_name, v_add, v_gst, v_state, v_scode, del_date_str, payment_terms, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 180px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
-                    po_html_content = generate_po_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Purchase Order")
+                    po_html_content = generate_po_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Purchase Order", include_sig_po)
 
                     full_po_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{po_html_content}</body></html>"
-                    
+
                     st.session_state['pdf_po'] = HTML(string=full_po_html).write_pdf()
                     st.session_state['po_no_disp'] = po_no
                     st.session_state['po_amt'] = f"₹{total_after:.2f}"
-                    
+
                     st.session_state.trigger_save_po = False
                     st.rerun()
 
@@ -1712,7 +1732,7 @@ else:
                         "Vendor Name": v_name, "Vendor Address": v_add, "Vendor GSTIN": v_gst, "Vendor State": v_state, "Vendor State Code": v_scode
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
-                    
+
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
@@ -1728,7 +1748,7 @@ else:
         elif menu == "📄 Tax Invoice":
             st.title("📄 Commercial Invoice Generator")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
-            
+
             if st.button("🔄 Clear Document Matrix", key="c_inv"):
                 preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
@@ -1761,15 +1781,15 @@ else:
                 eway_bill_no = c5_ew.text_input("E-Way Bill No. (Optional)", fd.get('eway_bill_no',''))
                 vendor_code = c3.text_input("Vendor Code (Optional)", fd.get('vendor_code',''))
                 po_no = c4.text_input("P.O. No. (Optional)", fd.get('po_no',''))
-                
+
                 c5, c6, c7, c8 = st.columns(4)
-                
+
                 po_date_val = None
                 if fd.get('po_date'):
                     try: po_date_val = datetime.datetime.strptime(fd.get('po_date'), '%d/%m/%Y').date()
                     except: pass
                 po_date = c5.date_input("P.O. Date (Optional)", value=po_date_val)
-                
+
                 transport_mode = c6.text_input("Transport Mode *", fd.get('transport_mode','Road'))
                 vehicle_no = c7.text_input("Vehicle No. *", fd.get('vehicle_no',''))
                 date_of_supply = c8.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
@@ -1778,17 +1798,17 @@ else:
                 col_b, col_s = st.columns(2)
                 with col_b:
                     st.markdown("**Bill-To Entity:**")
-                    
+
                     unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
                     p_names_list = ["-- Select Business Partner --"] + unique_parties
-                    
+
                     sel_company = st.selectbox("1. Select Company", p_names_list, key="sel_company_inv")
-                    
+
                     if sel_company != "-- Select Business Partner --":
                         company_records = [p for p in parties_db if p['party_name'] == sel_company]
                         address_options = [p['address'] for p in company_records]
                         sel_address = st.selectbox("2. Select Branch Address", address_options, key="sel_address_inv")
-                        
+
                         pm = next((p for p in company_records if p['address'] == sel_address), None)
                         if pm:
                             st.session_state.b1 = pm['party_name']
@@ -1799,7 +1819,7 @@ else:
                             st.session_state.pos_inv = pm.get('place_of_supply', '')
                     else:
                         for k in ['b1', 'b2', 'b3', 'b4', 'b5', 'pos_inv']: st.session_state[k] = ""
-                        
+
                     b_name = st.text_input("Partner Name *", key="b1")
                     b_add = st.text_area("Registered Address *", key="b2", height=68)
                     b_gst = st.text_input("GSTIN Reference *", key="b3")
@@ -1807,10 +1827,10 @@ else:
                     with c_st1: b_state = st.text_input("State Region *", key="b4")
                     with c_st2: b_scode = st.text_input("Regional Code *", key="b5")
                     with c_st3: place_of_supply = st.text_input("Place of Supply *", key="pos_inv")
-                
+
                 with col_s:
                     st.markdown("**Ship-To Entity:**")
-                    
+
                     if 's1' not in st.session_state:
                         st.session_state.s1 = fd.get('ship_to_name', '')
                         st.session_state.s2 = fd.get('ship_to_address', '')
@@ -1825,7 +1845,7 @@ else:
                         st.session_state.s3 = st.session_state.b3
                         st.session_state.s4 = st.session_state.b4
                         st.session_state.s5 = st.session_state.b5
-                    
+
                     s_name = st.text_input("Partner Name * ", key="s1", disabled=same_as)
                     s_add = st.text_area("Registered Address * ", key="s2", height=68, disabled=same_as)
                     s_gst = st.text_input("GSTIN Reference * ", key="s3", disabled=same_as)
@@ -1835,7 +1855,7 @@ else:
             st.subheader("📦 Line Items")
             items_db = fetch_data("SELECT * FROM item_master WHERE uid=%s AND party_name=%s", (uid, b_name)) if b_name else []
             item_opts = ["-- Manual Configuration --"] + [it['item_description'] for it in items_db]
-            
+
             col_btn1, col_btn2, _ = st.columns([2, 2, 8])
             if col_btn1.button("➕ Insert Blank Row"): st.session_state.item_count += 1; st.rerun()
             if col_btn2.button("➖ Remove Bottom Row") and st.session_state.item_count > 1: st.session_state.item_count -= 1; st.rerun()
@@ -1853,7 +1873,7 @@ else:
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item Sequence {i+1}**")
-                
+
                 if f"id_{i}" not in st.session_state:
                     st.session_state[f"id_{i}"] = ex.get('desc', '')
                     st.session_state[f"ih_{i}"] = ex.get('hsn', '')
@@ -1863,7 +1883,7 @@ else:
                     st.session_state[f"ir_{i}"] = float(ex.get('rate', 0.0))
 
                 sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_inv_widget_{i}", on_change=autofill_inv_item, args=(i, items_db))
-                
+
                 c1, c2, c3, c4, c_unit, c5 = st.columns([3, 1.2, 1.0, 1.2, 1.2, 1.4])
                 with c1: desc = st.text_input("Material Description *", key=f"id_{i}")
                 with c2: hsn = st.text_input("HSN Code *", key=f"ih_{i}")
@@ -1871,20 +1891,26 @@ else:
                 with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"iq_{i}")
                 with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"iu_{i}")
                 with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"ir_{i}")
-                
+
                 amount = round(qty * rate, 2)
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
 
-            tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)"], horizontal=True)
-            tax_mode = "IGST" if "IGST" in tax_type else "CGST"
+            # TAX & SIGNATURE OPTIONS FOR INVOICE
+            inv_tax_idx = 0
+            if fd.get('tax_type') == "IGST": inv_tax_idx = 1
+            elif fd.get('tax_type') == "NONE": inv_tax_idx = 2
+
+            tax_type = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)", "No Tax / Nil (0%)"], index=inv_tax_idx, horizontal=True)
+            tax_mode = "IGST" if "IGST" in tax_type else ("NONE" if "No Tax" in tax_type else "CGST")
+            include_sig_inv = st.checkbox("✍️ Include Digital Signature on Document", value=True, key="sig_inv")
 
             if 'pdf_comp' in st.session_state:
                 st.success("✅ Commercial Document Successfully Generated.")
                 c_dl1, c_dl2, c_wa = st.columns([2, 2, 1.5])
                 c_dl1.download_button("📄 Export Complete Document (3 Pages)", data=st.session_state['pdf_comp'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_Company.pdf", mime="application/pdf", type="primary")
                 c_dl2.download_button("📁 Export Accounting Copy (1 Page)", data=st.session_state['pdf_off'], file_name=f"TaxInvoice_{st.session_state['inv_no']}_OfficeCopy.pdf", mime="application/pdf")
-                
+
                 wa_msg = f"Hello {st.session_state.get('b1', 'Sir/Madam')},%0A%0AHere are your official billing details from *{my_company['name']}*:%0A*Invoice No:* {st.session_state['inv_no']}%0A*Total Amount:* {st.session_state.get('inv_amt', '')}%0A%0AWe appreciate your business!"
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
@@ -1896,7 +1922,7 @@ else:
                     igst = round(total_before * 0.18, 2) if tax_mode == "IGST" else 0.0
                     total_tax = round(cgst + sgst + igst, 2)
                     total_after = round(total_before + total_tax, 2)
-                    
+
                     amt_words = get_indian_currency_words(total_after)
                     items_json = json.dumps(items_data)
 
@@ -1915,19 +1941,19 @@ else:
                     else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y') if po_date else "", b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
-                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original")
-                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate")
-                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate")
-                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy")
+                    html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original", include_sig_inv)
+                    html_2 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Duplicate", include_sig_inv)
+                    html_3 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Triplicate", include_sig_inv)
+                    html_4 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Office Copy", include_sig_inv)
 
                     full_company_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_1}<div class='page-break'></div>{html_2}<div class='page-break'></div>{html_3}</body></html>"
                     full_office_html = f"<!DOCTYPE html><html><head>{base_css}</head><body>{html_4}</body></html>"
-                    
+
                     st.session_state['pdf_comp'] = HTML(string=full_company_html).write_pdf()
                     st.session_state['pdf_off'] = HTML(string=full_office_html).write_pdf()
                     st.session_state['inv_no'] = invoice_no
                     st.session_state['inv_amt'] = f"₹{total_after:.2f}"
-                    
+
                     st.session_state.trigger_save_inv = False
                     st.rerun()
 
@@ -1942,7 +1968,7 @@ else:
                         "Ship To GSTIN": s_gst, "Ship To State": s_state, "Ship To State Code": s_scode
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
-                    
+
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, HSN, Box, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
@@ -1958,7 +1984,7 @@ else:
         elif menu == "📝 Delivery Challan":
             st.title("📝 Automated Dispatch Challan")
             parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
-            
+
             if st.button("🔄 Initialize Blank Document", key="c_btn"):
                 preserve = ["auth_logged_in", "auth_role", "auth_name", "auth_uid", "cookie_manager", "cust_menu", "db_initialized"]
                 for k in list(st.session_state.keys()):
@@ -1968,7 +1994,7 @@ else:
             fd = st.session_state.get('form_data', {}); fi = st.session_state.get('form_items', []); mode = st.session_state.get('mode', 'INSERT')
             if 'item_count' not in st.session_state: st.session_state.item_count = 1
             if mode == "UPDATE": st.warning("⚠ Modifying active document record.")
-            
+
             def_chal_no = fd.get('challan_no', get_next_auto_no('challans', 'challan_no', safe_name)) if mode == "INSERT" else fd.get('challan_no','')
             def_date_time = get_ist_time()
 
@@ -1983,17 +2009,17 @@ else:
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Dispatch Logistics Details:**")
-                
+
                 unique_parties = sorted(list(set([p['party_name'] for p in parties_db])))
                 p_names_list = ["-- Select Business Partner --"] + unique_parties
-                
+
                 sel_company = st.selectbox("1. Select Company", p_names_list, key="sel_company_chal")
-                
+
                 if sel_company != "-- Select Business Partner --":
                     company_records = [p for p in parties_db if p['party_name'] == sel_company]
                     address_options = [p['address'] for p in company_records]
                     sel_address = st.selectbox("2. Select Branch Address", address_options, key="sel_address_chal")
-                    
+
                     pm = next((p for p in company_records if p['address'] == sel_address), None)
                     if pm:
                         st.session_state.p_name = pm['party_name']
@@ -2004,16 +2030,16 @@ else:
                         st.session_state.pos_chal = pm.get('place_of_supply', '')
                 else:
                     for k in ['p_name', 'p_add', 'p_gst', 'p_state', 'p_scode', 'pos_chal']: st.session_state[k] = ""
-                        
+
                 party_name = st.text_input("Dispatch To Name *", key="p_name")
                 party_address = st.text_area("Registered Address *", key="p_add")
                 party_gstin = st.text_input("GSTIN Reference *", key="p_gst")
-                
+
                 c_st1, c_st2, c_st3 = st.columns(3)
                 with c_st1: party_state = st.text_input("State Region *", key="p_state")
                 with c_st2: party_state_code = st.text_input("Regional Code *", key="p_scode")
                 with c_st3: place_of_supply = st.text_input("Place of Supply *", key="pos_chal")
-                
+
             with col2:
                 st.markdown("**Document Identification:**")
                 challan_no = st.text_input("Challan No. *", value=def_chal_no, key="c_no")
@@ -2044,7 +2070,7 @@ else:
             for i in range(st.session_state.item_count):
                 ex = fi[i] if i < len(fi) else {}
                 st.markdown(f"**Item Sequence {i+1}**")
-                
+
                 if f"desc_{i}" not in st.session_state:
                     st.session_state[f"desc_{i}"] = ex.get('desc', '')
                     st.session_state[f"hsn_{i}"] = ex.get('hsn', '')
@@ -2052,9 +2078,9 @@ else:
                     st.session_state[f"qty_{i}"] = float(ex.get('qty', 0.0))
                     st.session_state[f"unit_{i}"] = ex.get('unit', 'Pcs')
                     st.session_state[f"rate_{i}"] = float(ex.get('rate', 0.0))
-                
+
                 sel_it = st.selectbox(f"Select Material Profile {i+1}", item_opts, key=f"sel_it_chal_widget_{i}", on_change=autofill_chal_item, args=(i, items_db))
-                
+
                 c1, c2, c3, c4, c_unit, c5 = st.columns([3, 1.2, 1.0, 1.2, 1.2, 1.4])
                 with c1: desc = st.text_input("Material Description *", key=f"desc_{i}")
                 with c2: hsn = st.text_input("HSN Code *", key=f"hsn_{i}")
@@ -2062,41 +2088,61 @@ else:
                 with c4: qty = st.number_input("Quantity *", min_value=0.0, format="%.3f", key=f"qty_{i}")
                 with c_unit: unit = st.selectbox("Unit Config *", ["Pcs", "Kg", "Gram", "Mtr", "Ltr", "Set"], key=f"unit_{i}")
                 with c5: rate = st.number_input("Base Rate (₹) *", min_value=0.0, format="%.3f", key=f"rate_{i}")
-                
+
                 amount = round(qty * rate, 2)
                 items_data.append({"desc": desc, "hsn": hsn, "boxes": boxes, "qty": qty, "unit": unit, "rate": rate, "amount": amount})
                 st.markdown("---")
+
+            # TAX & SIGNATURE OPTIONS FOR CHALLAN
+            chal_tax_idx = 0
+            if fd.get('tax_type') == "IGST": chal_tax_idx = 1
+            elif fd.get('tax_type') == "NONE": chal_tax_idx = 2
+
+            tax_type_chal = st.radio("Tax Schema Configuration:", ["CGST + SGST (Intra-state)", "IGST (Inter-state)", "No Tax / Nil (0%)"], index=chal_tax_idx, horizontal=True, key="chal_tax")
+            tax_mode_chal = "IGST" if "IGST" in tax_type_chal else ("NONE" if "No Tax" in tax_type_chal else "CGST")
+            include_sig_chal = st.checkbox("✍️ Include Digital Signature on Document", value=True, key="sig_chal")
 
             if 'pdf_chal' in st.session_state:
                 st.success("✅ Commercial Document Successfully Generated.")
                 c_dl, c_wa = st.columns([2, 2])
                 c_dl.download_button(label="📄 Export Complete Document", data=st.session_state['pdf_chal'], file_name=f"Challan_{st.session_state.get('chal_no', 'New')}.pdf", mime="application/pdf", type="primary")
-                
+
                 wa_msg = f"Hello {st.session_state.get('chal_party', 'Sir/Madam')},%0A%0AHere are your official dispatch details from *{my_company['name']}*:%0A*Challan No:* {st.session_state.get('chal_no')}%0A*Vehicle No:* {st.session_state.get('chal_vehicle')}%0A*Total Amount:* {st.session_state.get('chal_amt')}%0A%0AWe appreciate your business!"
                 wa_link = f"https://wa.me/?text={wa_msg}"
                 c_wa.link_button("📲 Forward via WhatsApp", wa_link)
             else:
                 if st.session_state.get('trigger_save_chal', False):
                     total_before = round(sum(item['amount'] for item in items_data), 2)
-                    cgst_val = round(total_before * 0.09, 2)
-                    sgst_val = round(total_before * 0.09, 2)
-                    total_tax = round(cgst_val + sgst_val, 2)
+                    cgst_val = round(total_before * 0.09, 2) if tax_mode_chal == "CGST" else 0.0
+                    sgst_val = round(total_before * 0.09, 2) if tax_mode_chal == "CGST" else 0.0
+                    igst_val = round(total_before * 0.18, 2) if tax_mode_chal == "IGST" else 0.0
+                    total_tax = round(cgst_val + sgst_val + igst_val, 2)
                     total_after = round(total_before + total_tax, 2)
-                    
+
                     amt_words = get_indian_currency_words(total_after)
-                    
-                    if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}"))
-                    else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, eway_bill_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", fd['id']))
-                    
+
+                    if mode == "INSERT": execute_data("""INSERT INTO challans (created_by, challan_date, challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, items_data, amount, tax_type, is_deleted) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""", (safe_name, challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", tax_mode_chal))
+                    else: execute_data("""UPDATE challans SET challan_date=%s, challan_no=%s, eway_bill_no=%s, party_name=%s, party_address=%s, party_gstin=%s, party_state=%s, party_state_code=%s, vehicle_no=%s, date_of_supply=%s, transport_mode=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (challan_date.strftime('%d/%m/%Y'), challan_no, eway_bill_no, party_name, party_address, party_gstin, party_state, party_state_code, vehicle_no, date_of_supply, transport_mode, place_of_supply, json.dumps(items_data), f"₹{total_after:.2f}", tax_mode_chal, fd['id']))
+
                     items_html = ""
                     for idx, item in enumerate(items_data):
                         qty_val = float(item.get('qty', 0))
                         qty_str = f"{qty_val:g}"
                         qty_display = f"{qty_str} {item.get('unit', 'Pcs')}" if qty_val > 0 else ""
-                        
+
                         items_html += f"<tr><td style='text-align:center;'>{idx+1}.</td><td><strong>{item['desc'].replace(chr(10), '<br>')}</strong></td><td style='text-align:center;'>{item['hsn']}</td><td style='text-align:center;'>{item['boxes']}</td><td style='text-align:center;'>{qty_display}</td><td style='text-align:right;'>{float(item['rate']):.3f}</td><td style='text-align:right;'>{float(item['amount']):.2f}</td></tr>"
 
                     eway_row = f"<tr><td style='border:none; border-top: 1px solid #aeb6bf; padding-top: 4px;' colspan='2'><strong>E-Way Bill No:</strong> {eway_bill_no}</td></tr>" if eway_bill_no else ""
+
+                    if tax_mode_chal == "IGST":
+                        chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: IGST @ 18%</td><td style='text-align:right;'>{igst_val:.2f}</td></tr>"
+                        chal_rowspan = 4
+                    elif tax_mode_chal == "NONE":
+                        chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Tax (Nil / 0%)</td><td style='text-align:right;'>0.00</td></tr>"
+                        chal_rowspan = 4
+                    else:
+                        chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>{cgst_val:.2f}</td></tr><tr><td style='text-align:right; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>{sgst_val:.2f}</td></tr>"
+                        chal_rowspan = 5
 
                     html_content = f"""
                     <!DOCTYPE html><html><head><style>
@@ -2139,9 +2185,8 @@ else:
                                 {items_html}<tr class="spacer-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
                             </table>
                             <table style="border-top: 2px solid #1c2d42;">
-                                <tr><td rowspan="5" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:25%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:15%; text-align:right;">{total_before:.2f}</td></tr>
-                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: CGST @ 9%</td><td style="text-align:right;">{cgst_val:.2f}</td></tr>
-                                <tr><td style="text-align:right; background-color:#f8f9fa;">Add: SGST @ 9%</td><td style="text-align:right;">{sgst_val:.2f}</td></tr>
+                                <tr><td rowspan="{chal_rowspan}" style="width:60%; padding-left:10px;"><strong>Total Amount in Words:</strong><br><em>{amt_words}</em></td><td style="width:25%; text-align:right; background-color:#f8f9fa;">Total Before Tax</td><td style="width:15%; text-align:right;">{total_before:.2f}</td></tr>
+                                {chal_tax_rows}
                                 <tr><td style="text-align:right; background-color:#f8f9fa; font-weight:bold;">Total Amount of Tax</td><td style="text-align:right; font-weight:bold;">{total_tax:.2f}</td></tr>
                                 <tr><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">Total After Tax</td><td style="text-align:right; font-weight:bold; background-color:#e5e8e8;">{total_after:.2f}</td></tr>
                             </table>
@@ -2149,7 +2194,7 @@ else:
                                 <p style="font-size: 10px;">Certified That The Particulars given Above are true and correct.</p>
                                 <div class="signature">
                                     <p>For <strong>{my_company['name'].upper()}</strong></p>
-                                    <div style="text-align:center;">{get_signature_img()}</div>
+                                    <div style="text-align:center;">{get_signature_img(include_sig_chal)}</div>
                                     <p style="border-top:1px solid #000; font-size:10px;">Authorised Signature</p>
                                 </div>
                             </div>
@@ -2159,14 +2204,14 @@ else:
                             <div style="font-size: 10px;">All disputes are subject to G. B. Nagar Jurisdiction only.</div>
                         </div>
                     </body></html>"""
-                    
+
                     pdf_c = HTML(string=html_content).write_pdf()
                     st.session_state['pdf_chal'] = pdf_c
                     st.session_state['chal_no'] = challan_no if challan_no else 'New'
                     st.session_state['chal_party'] = party_name
                     st.session_state['chal_vehicle'] = vehicle_no
                     st.session_state['chal_amt'] = f"₹{total_after:.2f}"
-                    
+
                     st.session_state.trigger_save_chal = False
                     st.rerun()
 
@@ -2178,7 +2223,7 @@ else:
                         "Vehicle No.": vehicle_no, "Transport Mode": transport_mode, "Date & Time of Supply": date_of_supply
                     }
                     missing = [k for k, v in req_fields.items() if not str(v).strip()]
-                    
+
                     invalid_items = [str(idx+1) for idx, itm in enumerate(items_data) if not str(itm['desc']).strip() or not str(itm['hsn']).strip() or not str(itm['boxes']).strip() or float(itm['qty']) <= 0 or float(itm['rate']) <= 0]
                     if invalid_items:
                         missing.append(f"Incomplete Material Sequence (Description, HSN, Box, Qty > 0, Rate > 0) in Row(s): {', '.join(invalid_items)}")
