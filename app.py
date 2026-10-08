@@ -314,9 +314,6 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
         rowspan_val = 4
-    elif tax_type == "NONE":
-        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Tax (Nil / 0%)</td><td style='text-align:right; border: 1px solid #000;'>0.00</td></tr>"
-        rowspan_val = 4
     else:
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
         rowspan_val = 5
@@ -463,8 +460,6 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
 
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>IGST @18.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{igst:.2f}</td></tr>"
-    elif tax_type == "NONE":
-        tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>Tax (Nil / 0%)</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>0.00</td></tr>"
     else:
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>CGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{cgst:.2f}</td></tr><tr><td style='border-bottom: 1px solid #000; padding: 4px;'>SGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{sgst:.2f}</td></tr>"
 
@@ -2136,9 +2131,6 @@ else:
 
                     if tax_mode_chal == "IGST":
                         chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: IGST @ 18%</td><td style='text-align:right;'>{igst_val:.2f}</td></tr>"
-                        chal_rowspan = 4
-                    elif tax_mode_chal == "NONE":
-                        chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Tax (Nil / 0%)</td><td style='text-align:right;'>0.00</td></tr>"
                         chal_rowspan = 4
                     else:
                         chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>{cgst_val:.2f}</td></tr><tr><td style='text-align:right; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>{sgst_val:.2f}</td></tr>"
