@@ -151,6 +151,7 @@ def init_db():
             cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100), email VARCHAR(100), bank_name VARCHAR(100), bank_acc VARCHAR(50), bank_ifsc VARCHAR(50))")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
+            # Alter Tables
             try: cursor.execute("ALTER TABLE item_master ADD COLUMN party_name VARCHAR(255)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN place_of_supply VARCHAR(100)"); conn.commit()
@@ -182,6 +183,16 @@ def init_db():
             try: cursor.execute("ALTER TABLE company_profiles ADD COLUMN bank_acc VARCHAR(50)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE company_profiles ADD COLUMN bank_ifsc VARCHAR(50)"); conn.commit()
+            except: pass
+
+            # Tax Invoices Receivables Updates
+            try: cursor.execute("ALTER TABLE tax_invoices ADD COLUMN due_date VARCHAR(20)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE tax_invoices ADD COLUMN status VARCHAR(20) DEFAULT 'UNPAID'"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE tax_invoices ADD COLUMN paid_date VARCHAR(20)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE tax_invoices ADD COLUMN payment_mode VARCHAR(50)"); conn.commit()
             except: pass
 
             try: cursor.execute("DELETE FROM challans WHERE is_deleted = 1 AND deleted_at < NOW() - INTERVAL 30 DAY")
@@ -314,6 +325,9 @@ def generate_tax_invoice_html(comp, fd, items, tax_type, total_before, cgst, sgs
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: IGST @ 18%</td><td style='text-align:right; border: 1px solid #000;'>{igst:.2f}</td></tr>"
         rowspan_val = 4
+    elif tax_type == "NONE":
+        tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>0.00</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>0.00</td></tr>"
+        rowspan_val = 5
     else:
         tax_rows = f"<tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: CGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{cgst:.2f}</td></tr><tr><td style='text-align:right; font-weight:bold; background-color:#f8f9fa; border: 1px solid #000;'>Add: SGST @ 9%</td><td style='text-align:right; border: 1px solid #000;'>{sgst:.2f}</td></tr>"
         rowspan_val = 5
@@ -460,6 +474,8 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
 
     if tax_type == "IGST":
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>IGST @18.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{igst:.2f}</td></tr>"
+    elif tax_type == "NONE":
+        tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>CGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>0.00</td></tr><tr><td style='border-bottom: 1px solid #000; padding: 4px;'>SGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>0.00</td></tr>"
     else:
         tax_rows = f"<tr><td style='border-bottom: 1px solid #000; padding: 4px;'>CGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{cgst:.2f}</td></tr><tr><td style='border-bottom: 1px solid #000; padding: 4px;'>SGST @9.00</td><td style='border-bottom: 1px solid #000; padding: 4px; text-align: right;'>{sgst:.2f}</td></tr>"
 
@@ -570,8 +586,8 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
 def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total_paid, balance):
     rows_html = ""
     for idx, b in enumerate(bills):
-        inv_date = b['invoice_date'].strftime('%d/%m/%Y') if isinstance(b['invoice_date'], datetime.date) else b['invoice_date']
-        paid_str = b['paid_date'].strftime('%d/%m/%Y') if hasattr(b, 'paid_date') and isinstance(b['paid_date'], datetime.date) else (b.get('paid_date') or '-')
+        inv_date = b['invoice_date']
+        paid_str = b.get('paid_date') or '-'
         status = b['status']
         amt = float(b['amount'])
         color = "green" if status == "PAID" else "red"
@@ -639,6 +655,172 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
         </div>
     </body></html>
     """
+
+def generate_customer_outstanding_html(comp, customer_name, bills, total_billed, total_paid, balance):
+    rows_html = ""
+    for idx, b in enumerate(bills):
+        inv_date = b['invoice_date']
+        due_date = b.get('due_date') or '-'
+        status = b['status']
+        
+        # Clean amount if it contains ₹ symbol
+        amt_str = str(b['amount']).replace('₹', '').replace(',', '').strip()
+        amt = float(amt_str) if amt_str else 0.0
+        
+        color = "green" if status == "PAID" else "red"
+
+        rows_html += f"<tr>"
+        rows_html += f"<td style='text-align:center; padding: 6px; border: 1px solid #ccc;'>{idx+1}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{inv_date}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b['invoice_no']}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b['po_no'] or '-'}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{due_date}</td>"
+        rows_html += f"<td style='text-align:right; padding: 6px; border: 1px solid #ccc;'>{amt:,.2f}</td>"
+        rows_html += f"<td style='text-align:center; color:{color}; font-weight:bold; padding: 6px; border: 1px solid #ccc;'>{status}</td>"
+        rows_html += f"</tr>"
+
+    return f"""
+    <html><head><style>
+        @page {{ size: A4; margin: 15mm; }}
+        body {{ font-family: Arial, sans-serif; font-size: 12px; color: #000; }}
+        h1 {{ text-align: center; color: #1a4f8b; margin-bottom: 5px; }}
+        .header-info {{ text-align: center; margin-bottom: 20px; font-size: 11px; }}
+        .title {{ text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px; }}
+        .customer-info {{ margin-bottom: 15px; font-size: 12px; border: 1px solid #000; padding: 10px; background-color: #f8f9fa; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }}
+        th {{ background-color: #1a4f8b; color: white; padding: 6px; border: 1px solid #000; text-align: left; }}
+        .summary {{ width: 45%; float: right; }}
+        .summary th {{ background-color: #f0f0f0; color: #000; }}
+        .summary th, .summary td {{ padding: 6px; border: 1px solid #000; }}
+        .footer-sig {{ text-align: center; margin-top: 30px; float: right; width: 200px; }}
+    </style></head>
+    <body>
+        <h1>{comp['name'].upper()}</h1>
+        <div class="header-info">{comp['address']}<br>GSTIN: {comp['gstin']} | Contact: {comp['contact']}</div>
+        <div class="title">OUTSTANDING LEDGER STATEMENT</div>
+
+        <div class="customer-info">
+            <strong>Customer Name:</strong> {customer_name}<br>
+            <strong>Statement Generated On:</strong> {datetime.datetime.now().strftime('%d/%m/%Y %I:%M %p')}
+        </div>
+
+        <table>
+            <tr>
+                <th>S.No</th><th>Invoice Date</th><th>Invoice No.</th><th>PO Ref</th><th>Due Date</th><th>Amount (INR)</th><th>Status</th>
+            </tr>
+            {rows_html}
+        </table>
+
+        <div class="summary">
+            <table>
+                <tr><th>Total Billed</th><td style="text-align:right;">{total_billed:,.2f}</td></tr>
+                <tr><th>Total Received</th><td style="text-align:right;">{total_paid:,.2f}</td></tr>
+                <tr><th style="background-color:#d32f2f; color:white;">Total Outstanding Due</th><td style="text-align:right; font-weight:bold; color:#d32f2f;">{balance:,.2f}</td></tr>
+            </table>
+        </div>
+        <div style="clear:both;"></div>
+
+        <div class="footer-sig">
+            <strong>For {comp['name'].upper()}</strong>
+            <div style="text-align:center;">{get_signature_img(True)}</div>
+            <div style="border-top:1px solid #000; padding-top:2px;">Authorized Signatory</div>
+        </div>
+
+        <div style="clear:both;"></div>
+        <div style="text-align:center; font-size: 9px; margin-top: 30px; color: #666;">
+            ** This is a computer-generated statement **
+        </div>
+    </body></html>
+    """
+
+def generate_customer_receipt_html(comp, customer_name, payment_data):
+    amt_words = get_indian_currency_words(payment_data['amount'])
+
+    html = f"""
+    <html><head><style>
+        @page {{ size: A4; margin: 15mm; }}
+        body {{ font-family: Arial, sans-serif; font-size: 11px; color: #000; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 6px; text-align: left; }}
+        th {{ background-color: #f0f0f0; }}
+        .header-title {{ text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; }}
+    </style></head>
+    <body>
+        <div style="float: left; width: 45%;">
+            <div style="font-size: 14px; font-weight: bold;">{comp['name'].upper()}</div>
+            <div>{comp['address']}</div>
+            <div>GSTIN: {comp['gstin']}</div>
+        </div>
+        <div style="float: right; width: 45%; text-align: right; font-size: 24px; font-weight: bold; color: #1a4f8b;">
+            RECEIPT
+        </div>
+        <div style="clear: both; margin-bottom: 20px;"></div>
+
+        <div class="header-title">Payment Receipt Acknowledgment</div>
+
+        <div style="margin-bottom: 10px;">We acknowledge with thanks the receipt of your payment against the following invoice.</div>
+
+        <table>
+            <tr>
+                <td style="width: 25%;"><strong>Received Date</strong></td>
+                <td>{payment_data.get('pay_date', datetime.date.today().strftime('%d/%m/%Y'))}</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Mode</strong></td>
+                <td>{payment_data.get('pay_mode', 'N/A')}</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Currency</strong></td>
+                <td>INR</td>
+            </tr>
+            <tr>
+                <td><strong>Amount Received</strong></td>
+                <td>{float(payment_data['amount']):.2f}</td>
+            </tr>
+        </table>
+
+        <div style="font-weight: bold; margin-bottom: 5px;">Settlement Detail</div>
+        <table>
+            <tr>
+                <th>Invoice Number</th>
+                <th>Invoice Date</th>
+                <th>Invoice Amount</th>
+                <th>Currency</th>
+                <th>Amount Settled</th>
+            </tr>
+            <tr>
+                <td>{payment_data['bill_no']}</td>
+                <td>{payment_data['bill_date']}</td>
+                <td>{float(payment_data['bill_amt']):.2f}</td>
+                <td>INR</td>
+                <td>{float(payment_data['amount']):.2f}</td>
+            </tr>
+            <tr>
+                <td colspan="2" style="border:none;"></td>
+                <td colspan="3" style="border:none; border-top: 1px solid #ccc; text-align: right;">
+                    <strong>Total Received Value (in Words):</strong><br>{amt_words}
+                </td>
+            </tr>
+        </table>
+
+        <div style="border: 1px solid #ccc; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 5px;">Received From</div>
+            <strong>M/S {customer_name.upper()}</strong><br>
+        </div>
+
+        <div style="clear: both; margin-top: 50px; text-align: right;">
+            <strong>For {comp['name'].upper()}</strong>
+            <div style="text-align:right;">{get_signature_img(True)}</div>
+            <div style="border-top:1px solid #000; padding-top:2px; display:inline-block; width:200px; text-align:center;">Authorized Signatory</div>
+        </div>
+
+        <div style="clear: both; margin-top: 20px; font-size: 10px; font-style: italic; text-align:center;">
+            ** This is a computer-generated payment receipt **
+        </div>
+    </body>
+    </html>
+    """
+    return HTML(string=html).write_pdf()
 
 def generate_remittance_pdf(comp, payment_data):
     amt_words = get_indian_currency_words(payment_data['amount'])
@@ -893,7 +1075,7 @@ else:
             st.info("No active clients available to delete.")
 
     elif role == "CUSTOMER":
-        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "📥 Purchase & Payables", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
+        menu = st.sidebar.radio("Navigation", ["🏢 Dashboard", "🛒 Purchase Order", "📝 Delivery Challan", "📄 Tax Invoice", "💸 Sales & Receivables", "📥 Purchase & Payables", "📦 Add Master Data", "📜 Analytics History", "🗑️ Recycle Bin", "⚙️ Company Profile", "🤖 AI Assistant"], key="cust_menu")
 
         if menu == "🏢 Dashboard":
             st.title("🏢 Partner Dashboard")
@@ -933,6 +1115,156 @@ else:
                             st.rerun()
 
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+
+        elif menu == "💸 Sales & Receivables":
+            st.title("💸 Sales & Receivables")
+            st.write("Track Customer Invoices, Due Dates, and Received Payments.")
+
+            tab_pending, tab_paid = st.tabs(["⏳ Outstanding Dues", "✅ Payment Receipts"])
+
+            all_sales_invoices = fetch_data("SELECT * FROM tax_invoices WHERE created_by=%s AND is_deleted=0 ORDER BY id ASC", (safe_name,))
+
+            if all_sales_invoices:
+                with tab_pending:
+                    st.markdown("### 🚨 Outstanding Customer Dues")
+
+                    customer_ledger = {}
+                    for p in all_sales_invoices:
+                        c_name = p['bill_to_name']
+                        if c_name not in customer_ledger:
+                            customer_ledger[c_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": [], "all_bills": []}
+
+                        # Clean amount to float
+                        amt_str = str(p['amount']).replace('₹', '').replace(',', '').strip()
+                        amt = float(amt_str) if amt_str else 0.0
+
+                        customer_ledger[c_name]["total_billed"] += amt
+                        customer_ledger[c_name]["all_bills"].append(p)
+
+                        if p.get('status', 'UNPAID') == 'PAID':
+                            customer_ledger[c_name]["total_paid"] += amt
+                        else:
+                            customer_ledger[c_name]["pending_bills"].append(p)
+
+                    pending_customers = {k: v for k, v in customer_ledger.items() if len(v["pending_bills"]) > 0}
+
+                    if pending_customers:
+                        for c_name, data in pending_customers.items():
+                            balance = data["total_billed"] - data["total_paid"]
+
+                            with st.expander(f"🏢 {c_name} | Pending Balance: ₹ {balance:,.2f}"):
+                                c1, c2, c3 = st.columns(3)
+                                c1.metric("Total Billed", f"₹ {data['total_billed']:,.2f}")
+                                c2.metric("Total Received", f"₹ {data['total_paid']:,.2f}")
+                                c3.metric("Outstanding Balance", f"₹ {balance:,.2f}")
+
+                                stmt_html = generate_customer_outstanding_html(my_company, c_name, data['all_bills'], data['total_billed'], data['total_paid'], balance)
+                                stmt_pdf = HTML(string=stmt_html).write_pdf()
+
+                                st.download_button(
+                                    label="📄 Download Outstanding Statement (PDF)",
+                                    data=stmt_pdf,
+                                    file_name=f"Outstanding_Statement_{c_name.replace(' ', '_')}.pdf",
+                                    mime="application/pdf",
+                                    key=f"dl_stmt_cus_{c_name}",
+                                    type="primary"
+                                )
+                                st.markdown("---")
+
+                                st.markdown("#### ⏳ Pending Invoices")
+                                for p in data["pending_bills"]:
+                                    inv_date_str = p['invoice_date']
+                                    try:
+                                        inv_obj = datetime.datetime.strptime(inv_date_str, '%d/%m/%Y').date()
+                                    except:
+                                        inv_obj = datetime.date.today()
+
+                                    due_date_str = p.get('due_date')
+                                    if due_date_str:
+                                        try: due_obj = datetime.datetime.strptime(due_date_str, '%d/%m/%Y').date()
+                                        except: due_obj = inv_obj
+                                    else:
+                                        due_obj = inv_obj
+
+                                    days_left = (due_obj - datetime.date.today()).days
+
+                                    box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
+                                    status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
+
+                                    amt_str = str(p['amount']).replace('₹', '').replace(',', '').strip()
+                                    amt = float(amt_str) if amt_str else 0.0
+
+                                    st.markdown(f"""
+                                    <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <p style="margin:4px 0; font-size:15px;">
+                                                    <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>Inv No:</strong> {p['invoice_no']}</span> | 
+                                                    <span style="background-color:#e0e0e0; padding:2px 6px; border-radius:4px;"><strong>PO Ref:</strong> {p['po_no'] if p['po_no'] else 'N/A'}</span>
+                                                </p>
+                                                <p style="margin:2px 0; font-size:14px; color:#555;">Bill Date: {inv_obj.strftime('%d %b %Y')}</p>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <h3 style="margin:0; color:#d32f2f;">₹ {amt:,.2f}</h3>
+                                                <p style="margin:2px 0; font-weight:bold; font-size:12px; color: {'red' if days_left < 0 else 'orange' if days_left <=7 else 'green'};">{status_text} (Due: {due_obj.strftime('%d %b %Y')})</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                                    with st.form(f"pay_form_cus_{p['id']}", clear_on_submit=True):
+                                        c_mode, c_date, c_btn = st.columns([2, 2, 2])
+                                        pay_mode = c_mode.selectbox("Payment Mode", ["NEFT / RTGS", "Cheque", "UPI", "Cash"], key=f"pmode_{p['id']}")
+                                        pay_date = c_date.date_input("Received Date", datetime.date.today(), key=f"pdate_{p['id']}")
+                                        
+                                        if c_btn.form_submit_button("✅ Mark as Received"):
+                                            execute_data("UPDATE tax_invoices SET status='PAID', paid_date=%s, payment_mode=%s WHERE id=%s", (pay_date.strftime('%d/%m/%Y'), pay_mode, p['id']))
+                                            st.success("✅ Payment Received Successfully!")
+                                            time.sleep(1)
+                                            st.rerun()
+
+                                    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                    else:
+                        st.info("No pending invoices found! You have recovered all payments. 🎉")
+
+                with tab_paid:
+                    paid_data = [p for p in all_sales_invoices if p.get('status') == 'PAID']
+                    if paid_data:
+                        st.markdown("### ✅ Received Payments & Receipts")
+                        st.markdown("Download Payment Receipts for cleared invoices.")
+
+                        for p in paid_data[::-1]: # reverse list
+                            amt_str = str(p['amount']).replace('₹', '').replace(',', '').strip()
+                            amt = float(amt_str) if amt_str else 0.0
+
+                            c1, c2, c3, c4 = st.columns([2.5, 2.5, 2, 2])
+                            c1.write(f"**{p['bill_to_name']}**")
+                            c2.write(f"Inv: {p['invoice_no']} | Date: {p['invoice_date']}")
+                            c3.write(f"₹ {amt:,.2f}")
+                            c4.write(f"Paid on: {p.get('paid_date', '')} ({p.get('payment_mode', 'N/A')})")
+
+                            payment_data = {
+                                'pay_date': p.get('paid_date', ''),
+                                'pay_mode': p.get('payment_mode', 'N/A'),
+                                'amount': amt,
+                                'bill_no': p['invoice_no'],
+                                'bill_date': p['invoice_date'],
+                                'bill_amt': amt
+                            }
+                            receipt_pdf = generate_customer_receipt_html(my_company, p['bill_to_name'], payment_data)
+
+                            st.download_button(
+                                label="📄 Download Receipt",
+                                data=receipt_pdf,
+                                file_name=f"Receipt_{p['invoice_no']}.pdf",
+                                mime="application/pdf",
+                                key=f"dl_rect_{p['id']}"
+                            )
+                            st.markdown("---")
+                    else:
+                        st.info("No received payment history found yet.")
+            else:
+                st.info("No sales invoices created yet.")
 
         elif menu == "📥 Purchase & Payables":
             st.title("📥 Purchase Management & Payables")
@@ -1777,7 +2109,7 @@ else:
                 vendor_code = c3.text_input("Vendor Code (Optional)", fd.get('vendor_code',''))
                 po_no = c4.text_input("P.O. No. (Optional)", fd.get('po_no',''))
 
-                c5, c6, c7, c8 = st.columns(4)
+                c5, c6, c7, c8, c9 = st.columns(5)
 
                 po_date_val = None
                 if fd.get('po_date'):
@@ -1788,6 +2120,7 @@ else:
                 transport_mode = c6.text_input("Transport Mode *", fd.get('transport_mode','Road'))
                 vehicle_no = c7.text_input("Vehicle No. *", fd.get('vehicle_no',''))
                 date_of_supply = c8.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
+                credit_days = c9.number_input("Credit Period (Days)", min_value=0, value=30, step=1, key="inv_cd")
 
             with st.expander("🏢 Partner Information", expanded=True):
                 col_b, col_s = st.columns(2)
@@ -1921,6 +2254,9 @@ else:
                     amt_words = get_indian_currency_words(total_after)
                     items_json = json.dumps(items_data)
 
+                    due_d = invoice_date + datetime.timedelta(days=credit_days)
+                    due_date_str = due_d.strftime('%d/%m/%Y')
+
                     current_fd = {
                         'invoice_no': invoice_no, 'invoice_date': invoice_date.strftime('%d/%m/%Y'), 'eway_bill_no': eway_bill_no,
                         'vendor_code': vendor_code, 'po_no': po_no, 'po_date': po_date.strftime('%d/%m/%Y') if po_date else "",
@@ -1932,8 +2268,8 @@ else:
                         'ship_to_state': s_state, 'ship_to_state_code': s_scode
                     }
 
-                    if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y') if po_date else "", b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode))
-                    else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y') if po_date else "", b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, fd['id']))
+                    if mode == "INSERT": execute_data("""INSERT INTO tax_invoices (created_by, invoice_date, invoice_no, eway_bill_no, vendor_code, po_no, po_date, bill_to_name, bill_to_address, bill_to_gstin, bill_to_state, bill_to_state_code, ship_to_name, ship_to_address, ship_to_gstin, ship_to_state, ship_to_state_code, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_data, amount, tax_type, due_date, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'UNPAID')""", (safe_name, invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y') if po_date else "", b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, due_date_str))
+                    else: execute_data("""UPDATE tax_invoices SET invoice_date=%s, invoice_no=%s, eway_bill_no=%s, vendor_code=%s, po_no=%s, po_date=%s, bill_to_name=%s, bill_to_address=%s, bill_to_gstin=%s, bill_to_state=%s, bill_to_state_code=%s, ship_to_name=%s, ship_to_address=%s, ship_to_gstin=%s, ship_to_state=%s, ship_to_state_code=%s, transport_mode=%s, vehicle_no=%s, date_of_supply=%s, place_of_supply=%s, items_data=%s, amount=%s, tax_type=%s, due_date=%s WHERE id=%s""", (invoice_date.strftime('%d/%m/%Y'), invoice_no, eway_bill_no, vendor_code, po_no, po_date.strftime('%d/%m/%Y') if po_date else "", b_name, b_add, b_gst, b_state, b_scode, s_name, s_add, s_gst, s_state, s_scode, transport_mode, vehicle_no, date_of_supply, place_of_supply, items_json, f"₹{total_after:.2f}", tax_mode, due_date_str, fd['id']))
 
                     base_css = """<style>@page { size: A4; margin: 10mm 5mm; } body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; } .page-break { page-break-after: always; } .page-container { border: 2px solid #1c2d42; width: 100%; box-sizing: border-box; margin-bottom: 20px; position:relative;} .top-label { position: absolute; top: -15px; right: 5px; font-weight: bold; font-size: 10px; background: #fff; padding: 0 5px;} .container { width: 100%; } .header { text-align: center; border-bottom: 2px solid #1c2d42; padding: 10px; position: relative;} .header-left { position: absolute; top: 10px; left: 10px; text-align: left; } .header-right { position: absolute; top: 10px; right: 10px; text-align: right; } table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #1c2d42; padding: 4px; vertical-align: top; } .info-table td { border-bottom: 2px solid #1c2d42; border-top: none; } .items-table th { border-top: 2px solid #1c2d42; border-bottom: 2px solid #1c2d42; text-align: center; } .spacer-row td { height: 260px; border-bottom: none; border-top:none;} .footer { padding: 5px 10px; border-top: 2px solid #1c2d42; }</style>"""
                     html_1 = generate_tax_invoice_html(my_company, current_fd, items_data, tax_mode, total_before, cgst, sgst, igst, total_tax, total_after, amt_words, "Original", include_sig_inv)
@@ -2132,6 +2468,9 @@ else:
                     if tax_mode_chal == "IGST":
                         chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: IGST @ 18%</td><td style='text-align:right;'>{igst_val:.2f}</td></tr>"
                         chal_rowspan = 4
+                    elif tax_mode_chal == "NONE":
+                        chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>0.00</td></tr><tr><td style='text-align:right; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>0.00</td></tr>"
+                        chal_rowspan = 5
                     else:
                         chal_tax_rows = f"<tr><td style='text-align:right; background-color:#f8f9fa;'>Add: CGST @ 9%</td><td style='text-align:right;'>{cgst_val:.2f}</td></tr><tr><td style='text-align:right; background-color:#f8f9fa;'>Add: SGST @ 9%</td><td style='text-align:right;'>{sgst_val:.2f}</td></tr>"
                         chal_rowspan = 5
