@@ -588,10 +588,17 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
 def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total_paid, balance):
     rows_html = ""
     for idx, b in enumerate(bills):
-        inv_date = b['invoice_date'].strftime('%d/%m/%Y') if isinstance(b['invoice_date'], datetime.date) else b['invoice_date']
-        paid_str = b['paid_date'].strftime('%d/%m/%Y') if hasattr(b, 'paid_date') and isinstance(b['paid_date'], datetime.date) else (b.get('paid_date') or '-')
+        inv_date = b['invoice_date']
+        if isinstance(inv_date, datetime.date): 
+            inv_date = inv_date.strftime('%d/%m/%Y')
+            
+        paid_str = b.get('paid_date') or '-'
+        if isinstance(paid_str, datetime.date): 
+            paid_str = paid_str.strftime('%d/%m/%Y')
+            
         status = b['status']
-        amt = float(b['amount'])
+        amt_str = str(b['amount']).replace('₹', '').replace(',', '').strip()
+        amt = float(amt_str) if amt_str else 0.0
         color = "green" if status == "PAID" else "red"
 
         rows_html += f"<tr>"
@@ -661,11 +668,13 @@ def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total
 def generate_customer_outstanding_html(comp, customer_name, bills, total_billed, total_paid, balance):
     rows_html = ""
     for idx, b in enumerate(bills):
-        inv_date = b['invoice_date']
-        due_date = b.get('due_date') or '-'
+        inv_date = b.get('invoice_date')
+        if isinstance(inv_date, datetime.date): 
+            inv_date = inv_date.strftime('%d/%m/%Y')
+            
+        due_date = b.get('due_date_str', '-')
         status = b['status']
         
-        # Clean amount if it contains ₹ symbol
         amt_str = str(b['amount']).replace('₹', '').replace(',', '').strip()
         amt = float(amt_str) if amt_str else 0.0
         
@@ -675,7 +684,7 @@ def generate_customer_outstanding_html(comp, customer_name, bills, total_billed,
         rows_html += f"<td style='text-align:center; padding: 6px; border: 1px solid #ccc;'>{idx+1}</td>"
         rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{inv_date}</td>"
         rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b['invoice_no']}</td>"
-        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b['po_no'] or '-'}</td>"
+        rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{b.get('po_no', '-')}</td>"
         rows_html += f"<td style='padding: 6px; border: 1px solid #ccc;'>{due_date}</td>"
         rows_html += f"<td style='text-align:right; padding: 6px; border: 1px solid #ccc;'>{amt:,.2f}</td>"
         rows_html += f"<td style='text-align:center; color:{color}; font-weight:bold; padding: 6px; border: 1px solid #ccc;'>{status}</td>"
@@ -1137,9 +1146,31 @@ else:
                         if c_name not in customer_ledger:
                             customer_ledger[c_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": [], "all_bills": []}
 
-                        # Clean amount to float
+                        # 1. Parse Invoice Date safely
+                        inv_date_str = p['invoice_date']
+                        try:
+                            inv_obj = datetime.datetime.strptime(str(inv_date_str), '%d/%m/%Y').date()
+                        except:
+                            inv_obj = datetime.date.today()
+
+                        # 2. Get dynamic credit days directly from Master Data
+                        c_rec = next((pt for pt in parties_db if pt['party_name'] == c_name), None)
+                        c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
+
+                        # 3. Forcefully recalculate Due Date dynamically
+                        try:
+                            due_obj = inv_obj + datetime.timedelta(days=int(c_days))
+                        except:
+                            due_obj = inv_obj + datetime.timedelta(days=30)
+
+                        # Store newly calculated date back into dict for rendering
+                        p['inv_obj'] = inv_obj
+                        p['due_obj'] = due_obj
+                        p['due_date_str'] = due_obj.strftime('%d/%m/%Y')
+
                         amt_str = str(p['amount']).replace('₹', '').replace(',', '').strip()
                         amt = float(amt_str) if amt_str else 0.0
+                        p['clean_amt'] = amt
 
                         customer_ledger[c_name]["total_billed"] += amt
                         customer_ledger[c_name]["all_bills"].append(p)
@@ -1176,40 +1207,14 @@ else:
 
                                 st.markdown("#### ⏳ Pending Invoices")
                                 for p in data["pending_bills"]:
-                                    inv_date_str = p['invoice_date']
-                                    try:
-                                        inv_obj = datetime.datetime.strptime(inv_date_str, '%d/%m/%Y').date()
-                                    except:
-                                        inv_obj = datetime.date.today()
-
-                                    due_date_str = p.get('due_date')
-                                    if due_date_str:
-                                        try: 
-                                            due_obj = datetime.datetime.strptime(due_date_str, '%d/%m/%Y').date()
-                                        except: 
-                                            # Fallback if due date parsing fails
-                                            c_rec = next((pt for pt in parties_db if pt['party_name'] == c_name), None)
-                                            c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
-                                            try:
-                                                due_obj = inv_obj + datetime.timedelta(days=int(c_days))
-                                            except:
-                                                due_obj = inv_obj + datetime.timedelta(days=30)
-                                    else:
-                                        # Recalculate if completely missing
-                                        c_rec = next((pt for pt in parties_db if pt['party_name'] == c_name), None)
-                                        c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
-                                        try:
-                                            due_obj = inv_obj + datetime.timedelta(days=int(c_days))
-                                        except:
-                                            due_obj = inv_obj + datetime.timedelta(days=30)
-
+                                    inv_obj = p['inv_obj']
+                                    due_obj = p['due_obj']
+                                    
                                     days_left = (due_obj - datetime.date.today()).days
-
                                     box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
                                     status_text = f"🚨 OVERDUE BY {abs(days_left)} DAYS" if days_left < 0 else f"⚠️ Due in {days_left} Days"
 
-                                    amt_str = str(p['amount']).replace('₹', '').replace(',', '').strip()
-                                    amt = float(amt_str) if amt_str else 0.0
+                                    amt = p['clean_amt']
 
                                     st.markdown(f"""
                                     <div style="background-color: {box_color}; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px;">
@@ -1413,6 +1418,24 @@ else:
                         if v_name not in vendor_ledger:
                             vendor_ledger[v_name] = {"total_billed": 0.0, "total_paid": 0.0, "pending_bills": [], "all_bills": []}
 
+                        # 1. Parse Invoice Date safely
+                        inv_date_val = p['invoice_date']
+                        inv_obj = inv_date_val if isinstance(inv_date_val, datetime.date) else datetime.datetime.strptime(str(inv_date_val), '%Y-%m-%d').date()
+
+                        # 2. Get dynamic credit days directly from Master Data
+                        c_rec = next((pt for pt in parties_db if pt['party_name'] == v_name), None)
+                        c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
+
+                        # 3. Forcefully recalculate Due Date dynamically
+                        try:
+                            due_obj = inv_obj + datetime.timedelta(days=int(c_days))
+                        except:
+                            due_obj = inv_obj + datetime.timedelta(days=30)
+
+                        p['inv_obj'] = inv_obj
+                        p['due_obj'] = due_obj
+                        p['due_date_str'] = due_obj.strftime('%d/%m/%Y')
+
                         amt = float(p['amount'])
                         vendor_ledger[v_name]["total_billed"] += amt
                         vendor_ledger[v_name]["all_bills"].append(p)
@@ -1449,8 +1472,8 @@ else:
 
                                 st.markdown("#### ⏳ Pending Invoices for this Vendor")
                                 for p in data["pending_bills"]:
-                                    due_obj = p['due_date'] if isinstance(p['due_date'], datetime.date) else datetime.datetime.strptime(p['due_date'], '%Y-%m-%d').date()
-                                    inv_obj = p['invoice_date'] if isinstance(p['invoice_date'], datetime.date) else datetime.datetime.strptime(p['invoice_date'], '%Y-%m-%d').date()
+                                    inv_obj = p['inv_obj']
+                                    due_obj = p['due_obj']
                                     days_left = (due_obj - datetime.date.today()).days
 
                                     box_color = "#ffebee" if days_left < 0 else ("#fff8e1" if days_left <= 7 else "#f4f6f9")
