@@ -148,7 +148,7 @@ def init_db():
                 )
             """)
 
-            cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100), email VARCHAR(100), bank_name VARCHAR(100), bank_acc VARCHAR(50), bank_ifsc VARCHAR(50))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS party_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), address TEXT, gstin VARCHAR(20), state VARCHAR(100), state_code VARCHAR(10), place_of_supply VARCHAR(100), email VARCHAR(100), bank_name VARCHAR(100), bank_acc VARCHAR(50), bank_ifsc VARCHAR(50), credit_days INT DEFAULT 30)")
             cursor.execute("CREATE TABLE IF NOT EXISTS item_master (id INT AUTO_INCREMENT PRIMARY KEY, uid VARCHAR(50), party_name VARCHAR(255), item_description VARCHAR(255), hsn_code VARCHAR(20), rate FLOAT DEFAULT 0.0)")
 
             # Alter Tables
@@ -167,7 +167,7 @@ def init_db():
             try: cursor.execute("ALTER TABLE inward_challans ADD COLUMN amount FLOAT DEFAULT 0.0"); conn.commit()
             except: pass
 
-            # Party Bank Updates
+            # Party Bank Updates & Credit Days
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN email VARCHAR(100)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN bank_name VARCHAR(100)"); conn.commit()
@@ -175,6 +175,8 @@ def init_db():
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN bank_acc VARCHAR(50)"); conn.commit()
             except: pass
             try: cursor.execute("ALTER TABLE party_master ADD COLUMN bank_ifsc VARCHAR(50)"); conn.commit()
+            except: pass
+            try: cursor.execute("ALTER TABLE party_master ADD COLUMN credit_days INT DEFAULT 30"); conn.commit()
             except: pass
 
             # Company Bank Updates
@@ -586,8 +588,8 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
 def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total_paid, balance):
     rows_html = ""
     for idx, b in enumerate(bills):
-        inv_date = b['invoice_date']
-        paid_str = b.get('paid_date') or '-'
+        inv_date = b['invoice_date'].strftime('%d/%m/%Y') if isinstance(b['invoice_date'], datetime.date) else b['invoice_date']
+        paid_str = b['paid_date'].strftime('%d/%m/%Y') if hasattr(b, 'paid_date') and isinstance(b['paid_date'], datetime.date) else (b.get('paid_date') or '-')
         status = b['status']
         amt = float(b['amount'])
         color = "green" if status == "PAID" else "red"
@@ -1326,10 +1328,9 @@ else:
                         sel_chal_str = st.selectbox("Select Pending Vendor Challan *", pend_chal_opts)
 
                         inv_no = st.text_input("Vendor Bill / Invoice No. *", key="ib1")
-                        c3, c5, c6 = st.columns(3)
+                        c3, c5 = st.columns(2)
                         inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id1")
                         amt = c5.number_input("Total Final Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia1")
-                        credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1, key="ic1")
 
                         if st.form_submit_button("💾 Save Bill & Link to Challan"):
                             if sel_chal_str != "-- Select Unbilled Challan --" and inv_no and amt > 0:
@@ -1339,13 +1340,16 @@ else:
                                 chal_rec = fetch_data("SELECT challan_date, po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
                                 po_val = chal_rec[0]['po_ref'] if chal_rec else ""
 
+                                v_rec = next((p for p in parties_db if p['party_name'] == v_n), None)
+                                c_days = v_rec.get('credit_days') if v_rec and v_rec.get('credit_days') is not None else 30
+
                                 ch_date_obj = chal_rec[0]['challan_date'] if isinstance(chal_rec[0]['challan_date'], datetime.date) else datetime.datetime.strptime(str(chal_rec[0]['challan_date']), '%Y-%m-%d').date()
-                                due_d = ch_date_obj + datetime.timedelta(days=credit_days)
+                                due_d = ch_date_obj + datetime.timedelta(days=int(c_days))
 
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_n, inv_no, inv_date.strftime('%Y-%m-%d'), f"PO: {po_val} | Chal: {c_n}", amt, due_d.strftime('%Y-%m-%d')))
                                 execute_data("UPDATE inward_challans SET status='BILLED' WHERE vendor_name=%s AND challan_no=%s AND created_by=%s", (v_n, c_n, safe_name))
 
-                                st.success(f"✅ Challan Linked & Billed! Due date ({due_d.strftime('%d %b %Y')}) calculated strictly from material arrival date ({ch_date_obj.strftime('%d %b')}).")
+                                st.success(f"✅ Challan Linked & Billed! Due date ({due_d.strftime('%d %b %Y')}) calculated automatically from master data ({c_days} Days).")
                                 time.sleep(2.5)
                                 st.rerun()
                             else:
@@ -1356,19 +1360,22 @@ else:
                         v_name = c1.selectbox("Select Vendor *", ["-- Select Vendor --"] + party_names)
                         inv_no = c2.text_input("Vendor Bill / Invoice No. *", key="ib2")
 
-                        c3, c4, c5, c6 = st.columns(4)
+                        c3, c4, c5 = st.columns(3)
                         inv_date = c3.date_input("Bill Date *", datetime.date.today(), key="id2")
                         po_ref = c4.selectbox("Against P.O. No. (Optional)", po_dropdown_list)
                         amt = c5.number_input("Total Bill Amount (₹) *", min_value=0.0, step=100.0, key="ia2")
-                        credit_days = c6.number_input("Credit Period (Days) *", min_value=0, value=45, step=1, key="ic2")
 
                         if st.form_submit_button("💾 Save Direct Bill"):
                             if v_name != "-- Select Vendor --" and inv_no and amt > 0:
                                 po_val = "" if po_ref == "-- Direct Bill (No PO) --" else po_ref
-                                due_d = inv_date + datetime.timedelta(days=credit_days)
+                                
+                                v_rec = next((p for p in parties_db if p['party_name'] == v_name), None)
+                                c_days = v_rec.get('credit_days') if v_rec and v_rec.get('credit_days') is not None else 30
+                                due_d = inv_date + datetime.timedelta(days=int(c_days))
+                                
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_val, amt, due_d.strftime('%Y-%m-%d')))
-                                st.success(f"✅ Direct Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')} ({credit_days} Days)")
-                                time.sleep(1.5)
+                                st.success(f"✅ Direct Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')} based on Master Data ({c_days} Days).")
+                                time.sleep(2.5)
                                 st.rerun()
                             else:
                                 st.error("⚠️ Please select a Vendor and fill Bill No. and Amount.")
@@ -1572,7 +1579,8 @@ else:
                         pc = st.text_input("State Code *")
                         ppos = st.text_input("Place of Supply (City/State) *")
 
-                        st.markdown("**Contact & Bank Details (For Remittance Advice):**")
+                        st.markdown("**Payment Terms & Bank Details:**")
+                        p_credit = st.number_input("Default Credit Period (Days) *", min_value=0, value=30, step=1)
                         p_email = st.text_input("Email Address")
                         p_bname = st.text_input("Bank Name (e.g. Bank of India)")
                         p_bacc = st.text_input("Account Number")
@@ -1580,8 +1588,8 @@ else:
 
                         if st.form_submit_button("Save Partner"):
                             if pn and pa and pg and ps and pc:
-                                execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply, email, bank_name, bank_acc, bank_ifsc) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos, p_email, p_bname, p_bacc, p_bifsc))
-                                st.success(f"Partner '{pn}' securely registered with Bank Details.")
+                                execute_data("INSERT INTO party_master (uid, party_name, address, gstin, state, state_code, place_of_supply, email, bank_name, bank_acc, bank_ifsc, credit_days) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (uid, pn, pa, pg, ps, pc, ppos, p_email, p_bname, p_bacc, p_bifsc, p_credit))
+                                st.success(f"Partner '{pn}' securely registered with {p_credit} days credit.")
                                 time.sleep(1)
                                 st.rerun()
                             else: st.error("Please complete all mandatory fields marked with (*).")
@@ -1604,7 +1612,8 @@ else:
                             epc = st.text_input("State Code *", value=sel_p_data['state_code'])
                             eppos = st.text_input("Place of Supply (City/State) *", value=sel_p_data.get('place_of_supply', ''))
 
-                            st.markdown("**Contact & Bank Details:**")
+                            st.markdown("**Payment Terms & Bank Details:**")
+                            ep_credit = st.number_input("Default Credit Period (Days) *", min_value=0, value=int(sel_p_data.get('credit_days') or 30), step=1)
                             epemail = st.text_input("Email Address", value=sel_p_data.get('email', ''))
                             epbname = st.text_input("Bank Name", value=sel_p_data.get('bank_name', ''))
                             epbacc = st.text_input("Account Number", value=sel_p_data.get('bank_acc', ''))
@@ -1614,7 +1623,7 @@ else:
                                 if epn and epa and epg and eps and epc:
                                     old_name = sel_p_data['party_name']
                                     pid = sel_p_data['id']
-                                    execute_data("UPDATE party_master SET party_name=%s, address=%s, gstin=%s, state=%s, state_code=%s, place_of_supply=%s, email=%s, bank_name=%s, bank_acc=%s, bank_ifsc=%s WHERE id=%s", (epn, epa, epg, eps, epc, eppos, epemail, epbname, epbacc, epbifsc, pid))
+                                    execute_data("UPDATE party_master SET party_name=%s, address=%s, gstin=%s, state=%s, state_code=%s, place_of_supply=%s, email=%s, bank_name=%s, bank_acc=%s, bank_ifsc=%s, credit_days=%s WHERE id=%s", (epn, epa, epg, eps, epc, eppos, epemail, epbname, epbacc, epbifsc, ep_credit, pid))
                                     if epn != old_name:
                                         execute_data("UPDATE item_master SET party_name=%s WHERE party_name=%s AND uid=%s", (epn, old_name, uid))
                                     st.success(f"Partner details updated successfully!")
@@ -2109,7 +2118,7 @@ else:
                 vendor_code = c3.text_input("Vendor Code (Optional)", fd.get('vendor_code',''))
                 po_no = c4.text_input("P.O. No. (Optional)", fd.get('po_no',''))
 
-                c5, c6, c7, c8, c9 = st.columns(5)
+                c5, c6, c7, c8 = st.columns(4)
 
                 po_date_val = None
                 if fd.get('po_date'):
@@ -2120,7 +2129,6 @@ else:
                 transport_mode = c6.text_input("Transport Mode *", fd.get('transport_mode','Road'))
                 vehicle_no = c7.text_input("Vehicle No. *", fd.get('vehicle_no',''))
                 date_of_supply = c8.text_input("Date & Time of Supply *", value=fd.get('date_of_supply', def_date_time))
-                credit_days = c9.number_input("Credit Period (Days)", min_value=0, value=30, step=1, key="inv_cd")
 
             with st.expander("🏢 Partner Information", expanded=True):
                 col_b, col_s = st.columns(2)
@@ -2254,7 +2262,9 @@ else:
                     amt_words = get_indian_currency_words(total_after)
                     items_json = json.dumps(items_data)
 
-                    due_d = invoice_date + datetime.timedelta(days=credit_days)
+                    b_rec = next((p for p in parties_db if p['party_name'] == b_name), None)
+                    c_days = b_rec.get('credit_days') if b_rec and b_rec.get('credit_days') is not None else 30
+                    due_d = invoice_date + datetime.timedelta(days=int(c_days))
                     due_date_str = due_d.strftime('%d/%m/%Y')
 
                     current_fd = {
