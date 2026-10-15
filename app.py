@@ -1125,6 +1125,7 @@ else:
             tab_pending, tab_paid = st.tabs(["⏳ Outstanding Dues", "✅ Payment Receipts"])
 
             all_sales_invoices = fetch_data("SELECT * FROM tax_invoices WHERE created_by=%s AND is_deleted=0 ORDER BY id ASC", (safe_name,))
+            parties_db = fetch_data("SELECT * FROM party_master WHERE uid=%s", (uid,))
 
             if all_sales_invoices:
                 with tab_pending:
@@ -1183,10 +1184,24 @@ else:
 
                                     due_date_str = p.get('due_date')
                                     if due_date_str:
-                                        try: due_obj = datetime.datetime.strptime(due_date_str, '%d/%m/%Y').date()
-                                        except: due_obj = inv_obj
+                                        try: 
+                                            due_obj = datetime.datetime.strptime(due_date_str, '%d/%m/%Y').date()
+                                        except: 
+                                            # Fallback if due date parsing fails
+                                            c_rec = next((pt for pt in parties_db if pt['party_name'] == c_name), None)
+                                            c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
+                                            try:
+                                                due_obj = inv_obj + datetime.timedelta(days=int(c_days))
+                                            except:
+                                                due_obj = inv_obj + datetime.timedelta(days=30)
                                     else:
-                                        due_obj = inv_obj
+                                        # Recalculate if completely missing
+                                        c_rec = next((pt for pt in parties_db if pt['party_name'] == c_name), None)
+                                        c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
+                                        try:
+                                            due_obj = inv_obj + datetime.timedelta(days=int(c_days))
+                                        except:
+                                            due_obj = inv_obj + datetime.timedelta(days=30)
 
                                     days_left = (due_obj - datetime.date.today()).days
 
@@ -1344,7 +1359,10 @@ else:
                                 c_days = v_rec.get('credit_days') if v_rec and v_rec.get('credit_days') is not None else 30
 
                                 ch_date_obj = chal_rec[0]['challan_date'] if isinstance(chal_rec[0]['challan_date'], datetime.date) else datetime.datetime.strptime(str(chal_rec[0]['challan_date']), '%Y-%m-%d').date()
-                                due_d = ch_date_obj + datetime.timedelta(days=int(c_days))
+                                try:
+                                    due_d = ch_date_obj + datetime.timedelta(days=int(c_days))
+                                except:
+                                    due_d = ch_date_obj + datetime.timedelta(days=30)
 
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_n, inv_no, inv_date.strftime('%Y-%m-%d'), f"PO: {po_val} | Chal: {c_n}", amt, due_d.strftime('%Y-%m-%d')))
                                 execute_data("UPDATE inward_challans SET status='BILLED' WHERE vendor_name=%s AND challan_no=%s AND created_by=%s", (v_n, c_n, safe_name))
@@ -1371,7 +1389,10 @@ else:
                                 
                                 v_rec = next((p for p in parties_db if p['party_name'] == v_name), None)
                                 c_days = v_rec.get('credit_days') if v_rec and v_rec.get('credit_days') is not None else 30
-                                due_d = inv_date + datetime.timedelta(days=int(c_days))
+                                try:
+                                    due_d = inv_date + datetime.timedelta(days=int(c_days))
+                                except:
+                                    due_d = inv_date + datetime.timedelta(days=30)
                                 
                                 execute_data("INSERT INTO purchase_invoices (created_by, vendor_name, invoice_no, invoice_date, po_ref, amount, due_date) VALUES (%s, %s, %s, %s, %s, %s, %s)", (safe_name, v_name, inv_no, inv_date.strftime('%Y-%m-%d'), po_val, amt, due_d.strftime('%Y-%m-%d')))
                                 st.success(f"✅ Direct Bill added! Due date calculated as: {due_d.strftime('%d %b %Y')} based on Master Data ({c_days} Days).")
@@ -2264,7 +2285,10 @@ else:
 
                     b_rec = next((p for p in parties_db if p['party_name'] == b_name), None)
                     c_days = b_rec.get('credit_days') if b_rec and b_rec.get('credit_days') is not None else 30
-                    due_d = invoice_date + datetime.timedelta(days=int(c_days))
+                    try:
+                        due_d = invoice_date + datetime.timedelta(days=int(c_days))
+                    except:
+                        due_d = invoice_date + datetime.timedelta(days=30)
                     due_date_str = due_d.strftime('%d/%m/%Y')
 
                     current_fd = {
