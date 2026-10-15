@@ -588,17 +588,10 @@ def generate_po_html(comp, fd, items, tax_type, total_before, cgst, sgst, igst, 
 def generate_vendor_statement_html(comp, vendor_name, bills, total_billed, total_paid, balance):
     rows_html = ""
     for idx, b in enumerate(bills):
-        inv_date = b['invoice_date']
-        if isinstance(inv_date, datetime.date): 
-            inv_date = inv_date.strftime('%d/%m/%Y')
-            
-        paid_str = b.get('paid_date') or '-'
-        if isinstance(paid_str, datetime.date): 
-            paid_str = paid_str.strftime('%d/%m/%Y')
-            
+        inv_date = b['invoice_date'].strftime('%d/%m/%Y') if isinstance(b['invoice_date'], datetime.date) else b['invoice_date']
+        paid_str = b['paid_date'].strftime('%d/%m/%Y') if hasattr(b, 'paid_date') and isinstance(b['paid_date'], datetime.date) else (b.get('paid_date') or '-')
         status = b['status']
-        amt_str = str(b['amount']).replace('₹', '').replace(',', '').strip()
-        amt = float(amt_str) if amt_str else 0.0
+        amt = float(b['amount'])
         color = "green" if status == "PAID" else "red"
 
         rows_html += f"<tr>"
@@ -1153,13 +1146,18 @@ else:
                         except:
                             inv_obj = datetime.date.today()
 
-                        # 2. Get dynamic credit days directly from Master Data
-                        c_rec = next((pt for pt in parties_db if pt['party_name'] == c_name), None)
-                        c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
+                        # 2. Get dynamic credit days directly from Master Data (SMART MATCHING ADDED)
+                        clean_c_name = str(c_name).strip().lower()
+                        c_rec = next((pt for pt in parties_db if str(pt['party_name']).strip().lower() == clean_c_name), None)
+                        
+                        try:
+                            c_days = int(c_rec.get('credit_days')) if c_rec and c_rec.get('credit_days') is not None else 30
+                        except:
+                            c_days = 30
 
                         # 3. Forcefully recalculate Due Date dynamically
                         try:
-                            due_obj = inv_obj + datetime.timedelta(days=int(c_days))
+                            due_obj = inv_obj + datetime.timedelta(days=c_days)
                         except:
                             due_obj = inv_obj + datetime.timedelta(days=30)
 
@@ -1360,12 +1358,16 @@ else:
                                 chal_rec = fetch_data("SELECT challan_date, po_ref FROM inward_challans WHERE vendor_name=%s AND challan_no=%s AND created_by=%s AND status='UNBILLED' LIMIT 1", (v_n, c_n, safe_name))
                                 po_val = chal_rec[0]['po_ref'] if chal_rec else ""
 
-                                v_rec = next((p for p in parties_db if p['party_name'] == v_n), None)
-                                c_days = v_rec.get('credit_days') if v_rec and v_rec.get('credit_days') is not None else 30
+                                clean_v_name = str(v_n).strip().lower()
+                                v_rec = next((pt for pt in parties_db if str(pt['party_name']).strip().lower() == clean_v_name), None)
+                                try:
+                                    c_days = int(v_rec.get('credit_days')) if v_rec and v_rec.get('credit_days') is not None else 30
+                                except:
+                                    c_days = 30
 
                                 ch_date_obj = chal_rec[0]['challan_date'] if isinstance(chal_rec[0]['challan_date'], datetime.date) else datetime.datetime.strptime(str(chal_rec[0]['challan_date']), '%Y-%m-%d').date()
                                 try:
-                                    due_d = ch_date_obj + datetime.timedelta(days=int(c_days))
+                                    due_d = ch_date_obj + datetime.timedelta(days=c_days)
                                 except:
                                     due_d = ch_date_obj + datetime.timedelta(days=30)
 
@@ -1392,10 +1394,15 @@ else:
                             if v_name != "-- Select Vendor --" and inv_no and amt > 0:
                                 po_val = "" if po_ref == "-- Direct Bill (No PO) --" else po_ref
                                 
-                                v_rec = next((p for p in parties_db if p['party_name'] == v_name), None)
-                                c_days = v_rec.get('credit_days') if v_rec and v_rec.get('credit_days') is not None else 30
+                                clean_v_name = str(v_name).strip().lower()
+                                v_rec = next((pt for pt in parties_db if str(pt['party_name']).strip().lower() == clean_v_name), None)
                                 try:
-                                    due_d = inv_date + datetime.timedelta(days=int(c_days))
+                                    c_days = int(v_rec.get('credit_days')) if v_rec and v_rec.get('credit_days') is not None else 30
+                                except:
+                                    c_days = 30
+
+                                try:
+                                    due_d = inv_date + datetime.timedelta(days=c_days)
                                 except:
                                     due_d = inv_date + datetime.timedelta(days=30)
                                 
@@ -1422,13 +1429,18 @@ else:
                         inv_date_val = p['invoice_date']
                         inv_obj = inv_date_val if isinstance(inv_date_val, datetime.date) else datetime.datetime.strptime(str(inv_date_val), '%Y-%m-%d').date()
 
-                        # 2. Get dynamic credit days directly from Master Data
-                        c_rec = next((pt for pt in parties_db if pt['party_name'] == v_name), None)
-                        c_days = c_rec.get('credit_days') if c_rec and c_rec.get('credit_days') is not None else 30
+                        # 2. Get dynamic credit days directly from Master Data (SMART MATCHING ADDED)
+                        clean_v_name = str(v_name).strip().lower()
+                        c_rec = next((pt for pt in parties_db if str(pt['party_name']).strip().lower() == clean_v_name), None)
+                        
+                        try:
+                            c_days = int(c_rec.get('credit_days')) if c_rec and c_rec.get('credit_days') is not None else 30
+                        except:
+                            c_days = 30
 
                         # 3. Forcefully recalculate Due Date dynamically
                         try:
-                            due_obj = inv_obj + datetime.timedelta(days=int(c_days))
+                            due_obj = inv_obj + datetime.timedelta(days=c_days)
                         except:
                             due_obj = inv_obj + datetime.timedelta(days=30)
 
@@ -2306,12 +2318,19 @@ else:
                     amt_words = get_indian_currency_words(total_after)
                     items_json = json.dumps(items_data)
 
-                    b_rec = next((p for p in parties_db if p['party_name'] == b_name), None)
-                    c_days = b_rec.get('credit_days') if b_rec and b_rec.get('credit_days') is not None else 30
+                    # SMART MATCHING FOR INVOICE CREDIT DAYS
+                    clean_b_name = str(b_name).strip().lower()
+                    b_rec = next((pt for pt in parties_db if str(pt['party_name']).strip().lower() == clean_b_name), None)
                     try:
-                        due_d = invoice_date + datetime.timedelta(days=int(c_days))
+                        c_days = int(b_rec.get('credit_days')) if b_rec and b_rec.get('credit_days') is not None else 30
+                    except:
+                        c_days = 30
+                        
+                    try:
+                        due_d = invoice_date + datetime.timedelta(days=c_days)
                     except:
                         due_d = invoice_date + datetime.timedelta(days=30)
+                        
                     due_date_str = due_d.strftime('%d/%m/%Y')
 
                     current_fd = {
